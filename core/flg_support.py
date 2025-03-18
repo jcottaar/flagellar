@@ -188,11 +188,13 @@ def profile_each_line(func, *args, **kwargs):
 Data definition and loading
 '''
 loading_executor = None
+all_train_labels = pd.read_csv(data_dir + 'train_labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
 @dataclass
 class Data(BaseClass):
     # Holds one cryoET measurement, including ground truth or predicted labels
     is_train: bool = field(init=True, default=False)
     name: str = field(init=True, default='')
+    labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     data: object = field(init=False, default=None) # None, 3D np array, or h5py dataset
 
     def _check_constraints(self):
@@ -245,7 +247,15 @@ def load_one_measurement(name, is_train, include_train_labels):
     result = Data()
     result.name = name
     result.is_train = is_train
-    result.check_constraints()
+    if include_train_labels:
+        assert is_train
+        result.labels = all_train_labels[all_train_labels['tomo_id']==name].reset_index()[['z', 'y', 'x']]
+        if result.labels['z'][0]==-1:
+            assert result.labels['y'][0]==-1
+            assert result.labels['x'][0]==-1
+            assert len(result.labels)==1
+            result.labels = result.labels[0:0]
+    result.check_constraints()    
     return result
 
 def load_all_train_data():
