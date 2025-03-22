@@ -20,27 +20,27 @@ import sklearn.gaussian_process
 
 def extract_patch(matrix, center, patch_size, constant_value=0):
     """
-    Extracts a patch of size `patch_size` centered at `center` from a 3D numpy array `matrix`.
+    Extracts a patch of size `patch_size` centered at `center` from a nD numpy array `matrix`.
     If the patch extends beyond the boundaries of `matrix`, the missing values are filled with
     `constant_value`.
 
     Parameters:
-      matrix         : 3D numpy array from which to extract the patch.
-      center         : Tuple of 3 integers (z, y, x) specifying the center of the patch.
-      patch_size     : Tuple of 3 integers specifying the desired patch size.
+      matrix         : nD numpy array from which to extract the patch.
+      center         : Tuple of n integers (z, y, x) specifying the center of the patch.
+      patch_size     : Tuple of n integers specifying the desired patch size.
       constant_value : Value to fill in for out-of-bound regions (default is 0).
 
     Returns:
       patch          : A new 3D numpy array of shape `patch_size` containing the extracted patch.
     """
     # Create an output patch filled with the constant value.
-    patch = np.full(2*patch_size+1, constant_value, dtype=matrix.dtype)
+    patch = np.full(2*patch_size+1, constant_value, dtype=np.float64)
     
     # Prepare slices for each dimension.
     matrix_slices = []
     patch_slices = []
     
-    for i in range(3):
+    for i in range(len(matrix.shape)):
         # Calculate where the patch would start and end in the coordinate system of matrix.
         start = center[i] - patch_size[i]
         end = center[i] + patch_size[i] + 1
@@ -57,11 +57,11 @@ def extract_patch(matrix, center, patch_size, constant_value=0):
         patch_slices.append(slice(p_start, p_end))
     
     # Copy the overlapping region from the matrix to the patch.
-    patch[tuple(patch_slices)] = matrix[tuple(matrix_slices)]
+    patch[tuple(patch_slices)] = matrix[tuple(matrix_slices)].astype(np.float64)
     
     return patch
 
-def collect_patches(data, sizes):    
+def collect_patches(data, sizes, normalize_slices = True):    
     collected = []
     is_edge = []
     
@@ -72,6 +72,10 @@ def collect_patches(data, sizes):
             #to_append = copy.deepcopy(data_ext[coords[0]+3:coords[0]+2*sizes[0]+4,coords[1]+3:coords[1]+2*sizes[1]+4,coords[2]+3:coords[2]+2*sizes[2]+4])
             #to_append = to_append - np.mean(to_append)
             to_append = copy.deepcopy(extract_patch(d.data, coords, sizes, constant_value=np.nan))
+            if normalize_slices:
+                mean_list = extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+                std_list = extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+                to_append = (to_append-mean_list[:,np.newaxis,np.newaxis])/std_list[:,np.newaxis,np.newaxis]
             collected.append( to_append )                     
 
     collected = np.stack(collected)

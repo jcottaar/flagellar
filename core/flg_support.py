@@ -59,7 +59,7 @@ match env:
     case 'vast':
         data_dir = '/kaggle/data/'
         temp_dir = '/kaggle/temp/'
-        h5py_cache_dir = '/kaggle/cacche'
+        h5py_cache_dir = '/kaggle/cache'
 os.makedirs(temp_dir, exist_ok=True)
 os.makedirs(h5py_cache_dir, exist_ok=True)
 
@@ -196,11 +196,15 @@ class Data(BaseClass):
     name: str = field(init=True, default='')
     labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     data: object = field(init=False, default=None) # None, 3D np array, or h5py dataset
+    mean_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
+    std_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
 
     def _check_constraints(self):
         if not self.data is None:
             assert(len(self.data.shape)==3)
             assert type(self.data)==np.ndarray or type(self.data)==h5py._hl.dataset.Dataset
+            assert(self.mean_per_slice.shape==(self.data.shape[0],))
+            assert(self.std_per_slice.shape==(self.data.shape[0],))
 
     def load_to_h5py(self):
         assert self.is_train
@@ -211,12 +215,20 @@ class Data(BaseClass):
             with h5py.File(h5py_cache_dir + self.name + '.h5', 'w') as f:
                 dset=f.create_dataset('data', shape = self.data.shape, dtype='uint8')
                 dset[...] = self.data
+                dset=f.create_dataset('mean_per_slice', shape = self.mean_per_slice.shape, dtype='float64')
+                dset[...] = self.mean_per_slice
+                dset=f.create_dataset('std_per_slice', shape = self.std_per_slice.shape, dtype='float64')
+                dset[...] = self.std_per_slice
 
         # Import h5py
-        self.data = h5py.File(h5py_cache_dir + self.name + '.h5', 'r')['data']
+        f = h5py.File(h5py_cache_dir + self.name + '.h5', 'r')
+        self.data = f['data']
+        self.mean_per_slice = f['mean_per_slice'][...]
+        self.std_per_slice = f['std_per_slice'][...]
 
         self.check_constraints()
 
+    #@profile_each_line
     def load_to_memory(self):        
         if self.is_train and os.path.isfile(h5py_cache_dir + self.name + '.h5'):
             # Load from cache
@@ -235,6 +247,12 @@ class Data(BaseClass):
                 return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
             imgs = list(loading_executor.map(load_image, files))            
             self.data = np.stack(imgs)
+
+            claim_gpu('cupy')
+            import cupy as cp            
+            data_cp = cp.array(self.data)
+            self.mean_per_slice = cp.asnumpy(cp.mean(data_cp,axis=(1,2)))
+            self.std_per_slice = cp.asnumpy(cp.std(data_cp,axis=(1,2)))
 
         assert type(self.data)==np.ndarray
         self.check_constraints()
@@ -262,7 +280,7 @@ def load_all_train_data():
     directories = glob.glob(data_dir + 'train/tomo*')
     result = []
     for d in directories:
-        name = d[max(d.find('\\'), d.find('/'))+1:]
+        name = d[max(d.rfind('\\'), d.rfind('/'))+1:]
         if not name in['tomo_2b3cdf', 'tomo_62eea8', 'tomo_c84b8e', 'tomo_e6f7f7']: # mislabeled
             result.append(load_one_measurement(name, True, True))
         else:
