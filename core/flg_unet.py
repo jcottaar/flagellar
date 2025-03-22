@@ -32,6 +32,7 @@ import cc3d
 import flg_unet_resnet18_3layer
 import flg_unet_resnet34_3layer
 import itertools
+import monai
 
 @dataclass(slots=True)
 class DatasetTrain(torch.utils.data.IterableDataset):
@@ -40,7 +41,8 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     # Selection settings
     n_positive: int = field(init=True, default=1)
     n_random: int = field(init=True, default=1)
-    size: tuple = field(init=True, default=(128,128,128))    
+    size: tuple = field(init=True, default=(128,128*3//2,128*3//2))    
+    offset_range_for_pos: tuple = field(init=True, default=(32,64,64))
 
     # Transforms
     normalize: bool = field(init=True, default=True)
@@ -57,7 +59,12 @@ class DatasetTrain(torch.utils.data.IterableDataset):
         for d in self.data_list:
             d.load_to_h5py()
         volumes = np.array([np.prod(d.data.shape) for d in self.data_list]).astype(np.float64)
-        names = [d.name for d in self.data_list]        
+        names = [d.name for d in self.data_list]     
+        tl = []
+        for d in self.data_list:
+            tl.append(copy.deepcopy(d.labels))
+            tl[-1]['tomo_id'] = d.name
+        all_train_labels = pd.concat(tl, axis=0).reset_index()
         
         for i_set in itertools.count():     
             #t=time.time()
@@ -65,16 +72,17 @@ class DatasetTrain(torch.utils.data.IterableDataset):
             if i_set%(self.n_positive+self.n_random)<self.n_positive:
                 # Center around a motor
                 while True:
-                    row = rng.integers(0,len(fls.all_train_labels))
-                    if not fls.all_train_labels['z'][row]==-1:
+                    row = rng.integers(0,len(all_train_labels))
+                    if not all_train_labels['z'][row]==-1:
                         break
-                loc = np.argwhere([x==fls.all_train_labels['tomo_id'][row] for x in names])
+                loc = np.argwhere([x==all_train_labels['tomo_id'][row] for x in names])
                 assert(loc.shape == (1,1))
                 dataset = self.data_list[loc[0,0]]
-                coords = [fls.all_train_labels['z'][row], fls.all_train_labels['y'][row], fls.all_train_labels['x'][row]]
-                for i,c in enumerate(coords):
-                    if c<self.size[i]//2: coords[i] = self.size[i]//2                    
-                    if c>dataset.data.shape[i]-self.size[i]//2-1: coords[i] = dataset.data.shape[i]-self.size[i]//2-1
+                coords = [all_train_labels['z'][row], all_train_labels['y'][row], all_train_labels['x'][row]]                
+                for i in range(3):
+                    coords[i] = coords[i] + rng.integers(-self.offset_range_for_pos[i], self.offset_range_for_pos[i])
+                    if coords[i]<self.size[i]//2: coords[i] = self.size[i]//2                    
+                    if coords[i]>dataset.data.shape[i]-self.size[i]//2-1: coords[i] = dataset.data.shape[i]-self.size[i]//2-1
                 #print(dataset.name,dataset.data.shape,coords)
             else:
                 # Pick at random
@@ -121,7 +129,96 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 
             #print('4', t-time.time())
             yield image, target
-           
+
+
+@dataclass
+class UNetModel(fls.BaseClass):
+    # Data management
+    dataset: object = field(init=True, default_factory=DatasetTrain)
+
+    # Learning rate
+    learning_rate = 1e-3
+    n_images_per_update = 10
+    n_epochs = 100
+
+    # Loss
+    tversky_alpha = 1.
+    tversky_beta = 1.
+
+    # Other
+    seed = 0
+    verbose = False
+
+    # Trained
+    model = 0
+
+    # Diagnostics
+    train_loss_list1: list = field(init=True, default_factory=list)
+    train_loss_list2: list = field(init=True, default_factory=list)
     
+    deterministic_train = False
+
+    @fls.profile_each_line
+    def train(self,train_data):
+        #TODO: half precision, mix losses, scheduler, augments, ensemble
+        cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
+
+        criterion1 = nn.BCEWithLogitsLoss()
+        criterion2 = monai.losses.TverskyLoss(smooth_nr=1e-05, smooth_dr=1e-05, batch=False, to_onehot_y=False, sigmoid=True, \
+                                                 alpha=self.tversky_alpha, beta=self.tversky_beta)
+
+        model = flg_unet_resnet18_3layer.UNetResNet18_3D(num_classes=1)
+
+        for module in model.modules():  # Recursively iterate through all submodules
+            if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+                module.momentum = 0.01
+                module.affine = False
+
+        model = model.to(device)
+        
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)   
+
+        self.dataset.data_list = copy.deepcopy(train_data)
+        data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=1,pin_memory=True,persistent_workers=True))
+
+        scaler = torch.amp.GradScaler('cuda')
+
+        for i_epoch in range(self.n_epochs):
+            print(i_epoch)
+            running_loss1 = 0.0
+            running_loss2 = 0.0
+            images, targets = next(data_loader)
+            with torch.amp.autocast('cuda'):
+                for i_image in range(images.shape[0]):
+                    image_device = images[i_image:i_image+1,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                    target_device = targets[i_image:i_image+1,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                    output = model(image_device)                                    
+                    loss1 = criterion1(output, target_device)
+                    loss2 = criterion2(output, target_device)                                                
+                    running_loss1 += loss1.item()
+                    running_loss2 += loss2.item()
+    
+                    loss = 0.004*loss1 + loss2
+    
+                    scaler.scale(loss/images.shape[0]).backward()
+
+            epoch_loss1 = running_loss1 / images.shape[0]
+            epoch_loss2 = running_loss2 / images.shape[0]            
+            #loss.backward()
+            #optimizer.step()            
+            scaler.step(optimizer)
+            scaler.update()
+            
+            self.train_loss_list1.append(epoch_loss1)
+            self.train_loss_list2.append(epoch_loss2)
+
+            optimizer.zero_grad()
+
+        model.to(cpu)
+        model.eval()
+        self.model = model
+                
+
+        
 
                          
