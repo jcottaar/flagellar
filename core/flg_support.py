@@ -196,6 +196,7 @@ class Data(BaseClass):
     name: str = field(init=True, default='')
     labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     data: object = field(init=False, default=None) # None, 3D np array, or h5py dataset
+    voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom
     mean_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
     std_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
 
@@ -273,6 +274,7 @@ def load_one_measurement(name, is_train, include_train_labels):
             assert result.labels['x'][0]==-1
             assert len(result.labels)==1
             result.labels = result.labels[0:0]
+        result.voxel_spacing = all_train_labels[all_train_labels['tomo_id']=='tomo_003acc'].reset_index()[0:1][['Voxel spacing']].to_numpy()[0,0]
     result.check_constraints()    
     return result
 
@@ -283,8 +285,6 @@ def load_all_train_data():
         name = d[max(d.rfind('\\'), d.rfind('/'))+1:]
         if not name in['tomo_2b3cdf', 'tomo_62eea8', 'tomo_c84b8e', 'tomo_e6f7f7']: # mislabeled
             result.append(load_one_measurement(name, True, True))
-        else:
-            print('Skipped '+name)
     return result
     
 

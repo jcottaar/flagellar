@@ -81,3 +81,34 @@ def collect_patches(data, sizes, normalize_slices = True):
     collected = np.stack(collected)
     is_edge = np.array(is_edge)
     return collected, is_edge
+
+
+def add_matrix_with_offset(A,B,offset):
+    # Adds B to A, with the center of B at index offset
+    # 3D matrices
+    # Elements of B that end up outside A are ignored
+    # Works in place
+
+    # Calculate the start and end indices for A
+    z_start = max(0, offset[0] - B.shape[0] // 2)
+    y_start = max(0, offset[1] - B.shape[1] // 2)
+    x_start = max(0, offset[2] - B.shape[2] // 2)
+    
+    z_end = min(A.shape[0], offset[0] + B.shape[0] // 2 + 1)
+    y_end = min(A.shape[1], offset[1] + B.shape[1] // 2 + 1)
+    x_end = min(A.shape[2], offset[2] + B.shape[2] // 2 + 1)
+
+    if z_end<z_start or y_end<y_start or x_end<x_start:
+        return
+    
+    # Calculate the corresponding start and end indices for B
+    bz_start = max(0, B.shape[0] // 2 - offset[0])
+    by_start = max(0, B.shape[1] // 2 - offset[1])
+    bx_start = max(0, B.shape[2] // 2 - offset[2])
+    
+    bz_end = bz_start + (z_end - z_start)
+    by_end = by_start + (y_end - y_start)
+    bx_end = bx_start + (x_end - x_start)
+
+    # Add B to A at the specified offset
+    A[z_start:z_end, y_start:y_end, x_start:x_end] += B[bz_start:bz_end, by_start:by_end, bx_start:bx_end]
