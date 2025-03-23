@@ -158,7 +158,6 @@ class UNetModel(fls.BaseClass):
     
     deterministic_train = False
 
-    @fls.profile_each_line
     def train(self,train_data):
         #TODO: half precision, mix losses, scheduler, augments, ensemble
         cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
@@ -195,15 +194,15 @@ class UNetModel(fls.BaseClass):
                     output = model(image_device)                                    
                     loss1 = criterion1(output, target_device)
                     loss2 = criterion2(output, target_device)                                                
-                    running_loss1 += loss1.item()
-                    running_loss2 += loss2.item()
+                    running_loss1 += loss1.detach()
+                    running_loss2 += loss2.detach()
     
                     loss = 0.004*loss1 + loss2
     
                     scaler.scale(loss/images.shape[0]).backward()
 
-            epoch_loss1 = running_loss1 / images.shape[0]
-            epoch_loss2 = running_loss2 / images.shape[0]            
+            epoch_loss1 = running_loss1.item() / images.shape[0]
+            epoch_loss2 = running_loss2.item() / images.shape[0]            
             #loss.backward()
             #optimizer.step()            
             scaler.step(optimizer)
