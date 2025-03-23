@@ -16,9 +16,6 @@ import flg_numerics
 import sklearn.neighbors
 import cupy as cp
 import warnings
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    import cupyx.scipy.ndimage
 import functools
 import hashlib
 import time
@@ -33,6 +30,7 @@ import flg_unet_resnet18_3layer
 import flg_unet_resnet34_3layer
 import itertools
 import monai
+import gc
 
 @dataclass(slots=True)
 class DatasetTrain(torch.utils.data.IterableDataset):
@@ -138,12 +136,16 @@ class UNetModel(fls.BaseClass):
 
     # Learning rate
     learning_rate = 1e-3
-    n_images_per_update = 10
-    n_epochs = 100
+    n_images_per_update = 20
+    n_epochs = 2000
 
     # Loss
     tversky_alpha = 1.
     tversky_beta = 1.
+
+    # Inference
+    infer_size: tuple = field(init=True, default=(256,256,256))
+    infer_overlap = 64
 
     # Other
     seed = None
@@ -181,7 +183,7 @@ class UNetModel(fls.BaseClass):
         self.dataset.data_list = copy.deepcopy(train_data)
         if not self.seed is None:
             self.dataset.seed = self.seed+1
-        data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=0,pin_memory=True,persistent_workers=True))
+        data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=1,pin_memory=True,persistent_workers=True))
 
         scaler = torch.amp.GradScaler('cuda')
 
@@ -241,6 +243,58 @@ class UNetModel(fls.BaseClass):
         model.to(cpu)
         model.eval()
         self.model = model
+
+    @fls.profile_each_line
+    def infer(self, data):
+        #TODO: TTA
+
+        cpu,device = fls.prep_pytorch(self.seed, False, False)
+
+        # Prepare data and output
+        image = torch.tensor(data.data, dtype=torch.float16).to(device)
+        if self.dataset.normalize:
+            for ii in range(image.shape[0]):
+                image[ii,:,:] = (image[ii,:,:]-data.mean_per_slice[ii])/data.std_per_slice[ii]
+        image = image[None,None,:,:,:]
+        combined_probablity_map = torch.zeros((image.shape[2], image.shape[3], image.shape[4]),dtype=torch.float16).to(device)
+        self.model.to(device)
+        self.model.eval()
+
+        def find_ranges(total_size, batch_size_infer, infer_edge_size):
+            assert total_size>batch_size_infer
+            ranges = [((0,batch_size_infer), (0,batch_size_infer-infer_edge_size), (0,batch_size_infer-infer_edge_size))]
+            # part of input to use - part of result to use - where to insert in probablity_map
+            cur_start = 0
+            while True:
+                cur_start = cur_start + batch_size_infer - 2*infer_edge_size
+                cur_end = cur_start + batch_size_infer
+                if cur_end>=total_size:
+                    break
+                ranges.append( ((cur_start, cur_end),  (infer_edge_size,batch_size_infer-infer_edge_size), (cur_start+infer_edge_size, cur_end-infer_edge_size)) )                
+            ranges.append( ((total_size-batch_size_infer, total_size), (infer_edge_size,batch_size_infer), (total_size-batch_size_infer+infer_edge_size,total_size)) )
+            return ranges
+
+        ranges_z = find_ranges(image.shape[2], self.infer_size[0], self.infer_overlap)
+        ranges_y = find_ranges(image.shape[3], self.infer_size[1], self.infer_overlap)
+        ranges_x = find_ranges(image.shape[4], self.infer_size[2], self.infer_overlap)
+
+        with torch.no_grad(), torch.amp.autocast('cuda'):
+            for rx in ranges_x:
+                for ry in ranges_y:
+                    for rz in ranges_z:
+                        #print(rx,ry,rz)
+                        res = self.model(image[:1,:1,rz[0][0]:rz[0][1],ry[0][0]:ry[0][1],rx[0][0]:rx[0][1]])                        
+                        combined_probablity_map[rz[2][0]:rz[2][1],ry[2][0]:ry[2][1],rx[2][0]:rx[2][1]] = \
+                            res[0,0,rz[1][0]:rz[1][1],ry[1][0]:ry[1][1],rx[1][0]:rx[1][1]]
+
+        self.model.to(cpu)
+
+        del image
+        gc.collect()
+        print(combined_probablity_map.shape)
+        return combined_probablity_map.to(torch.float32).detach().cpu().numpy()
+
+        
                 
 
         

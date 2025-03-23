@@ -28,6 +28,7 @@ import concurrent
 import glob
 import cv2
 import h5py
+import time
 
 
 '''
@@ -52,16 +53,29 @@ match env:
         data_dir = 'd:/flagellar/data/'
         temp_dir = 'd:/flagellar/temp/'     
         h5py_cache_dir = 'd:/flagellar/cache/'
+        model_dir = 'd:/flagellar/models/'
+        output_dir = temp_dir
+        loader_threads = 32
     case 'kaggle':
         data_dir = '/kaggle/input/byu-locating-bacterial-flagellar-motors-2025/'
         temp_dir = '/kaggle/temp/'
         h5py_cache_dir = '/kaggle/temp/cache/'
+        model_dir = '/kaggle/input/my-flg-models/'
+        output_dir = '/kaggle/working/'
+        loader_threads = 8
     case 'vast':
         data_dir = '/kaggle/data/'
         temp_dir = '/kaggle/temp/'
         h5py_cache_dir = '/kaggle/cache'
+        model_dir = '/kaggle/models/'
+        output_dir = temp_dir
+        loader_threads = 32
 os.makedirs(temp_dir, exist_ok=True)
 os.makedirs(h5py_cache_dir, exist_ok=True)
+os.makedirs(model_dir, exist_ok=True)
+profiling = True
+if is_submission:
+    profiling = False
 
 # How many workers is optimal for parallel pool?
 def recommend_n_workers():
@@ -133,6 +147,8 @@ def dill_save(filename, data):
     return data
 
 def prep_pytorch(seed, deterministic, deterministic_needs_cpu):
+    if seed is None:
+        seed = np.random.default_rng(seed=None).integers(0,1e6)
     import random
     random.seed(seed)
     np.random.seed(seed)
@@ -174,6 +190,8 @@ def claim_gpu(new_claimant):
 
 @decorator
 def profile_each_line(func, *args, **kwargs):
+    if not profiling:
+        return func(*args, **kwargs)
     profiler = LineProfiler()
     profiled_func = profiler(func)
     try:
@@ -183,6 +201,9 @@ def profile_each_line(func, *args, **kwargs):
     except:
         profiler.print_stats()
         raise
+
+def profile_print(string):
+    if profiling: print(string)
 
 '''
 Data definition and loading
@@ -215,7 +236,7 @@ class Data(BaseClass):
     def load_to_h5py(self):
         assert self.is_train
 
-        if self.loaded_state = 'h5py': return
+        if self.loaded_state == 'h5py': return
         
         # Create h5py if needed
         if not os.path.isfile(h5py_cache_dir + self.name + '.h5'):
@@ -237,23 +258,26 @@ class Data(BaseClass):
         self.loaded_state = 'h5py'
         self.check_constraints()
 
-    #@profile_each_line
+    @profile_each_line
     def load_to_memory(self):  
-        if self.loaded_state = 'memory': return
+        if self.loaded_state == 'memory': return
         
         if self.is_train and os.path.isfile(h5py_cache_dir + self.name + '.h5'):
             # Load from cache
             with h5py.File(h5py_cache_dir + self.name + '.h5', 'r') as f:
                 self.data = f['data'][...]
+                self.mean_per_slice = f['mean_per_slice'][...]
+                self.std_per_slice = f['std_per_slice'][...]
         else:
             # Read directly
             global loading_executor
             if loading_executor is None:
-                loading_executor = concurrent.futures.ThreadPoolExecutor(max_workers=32)
+                loading_executor = concurrent.futures.ThreadPoolExecutor(max_workers=loader_threads)
             if self.is_train:
                 files = glob.glob(data_dir + 'train/' + self.name + '/*.jpg')            
             else:
-                files = glob.glob(data_dir + 'test/' + self.name + '/*.jpg')            
+                files = glob.glob(data_dir + 'test/' + self.name + '/*.jpg')
+            files.sort()
             def load_image(f):
                 return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
             imgs = list(loading_executor.map(load_image, files))            
@@ -292,6 +316,7 @@ def load_one_measurement(name, is_train, include_train_labels):
 
 def load_all_train_data():
     directories = glob.glob(data_dir + 'train/tomo*')
+    directories.sort()
     result = []
     for d in directories:
         name = d[max(d.rfind('\\'), d.rfind('/'))+1:]
@@ -299,7 +324,14 @@ def load_all_train_data():
             result.append(load_one_measurement(name, True, True))
     return result
 
-
+def load_all_test_data():
+    directories = glob.glob(data_dir + 'test/tomo*')
+    directories.sort()
+    result = []
+    for d in directories:
+        name = d[max(d.rfind('\\'), d.rfind('/'))+1:]
+        result.append(load_one_measurement(name, False, False))
+    return result
 '''
 General model definition
 '''
@@ -311,7 +343,7 @@ def infer_internal_single_parallel(data):
         if model_parallel is None:
             model_parallel= dill_load(temp_dir+'parallel.pickle')
         data.load_to_memory()
-        return_data = copy.deepcopy(model_parallel._infer_single(data))
+        return_data = model_parallel._infer_single(data)
         return_data.unload()
         return return_data
     except Exception as err:
@@ -325,69 +357,29 @@ class Model(BaseClass):
     state: int = field(init=False, default=0) # 0: untrained, 1: trained
     quiet: bool = field(init=False, default=True)
     run_in_parallel: bool = field(init=False, default=False)    
-    seed: int = field(init=False, default=42)
-    fill_infer_cache: bool = field(init=False, default=False)
-    infer_cache: dict = field(init=False, default_factory=dict)
-
-    @property
-    def hyperparameters(self):
-        return [self._get_hyperparameters_per_particle(ind) for ind in range(len(particle_names))]
-
-    @hyperparameters.setter
-    def hyperparameters(self, value):
-        for ind in range(len(particle_names)):
-            self._set_hyperparameters_per_particle(ind,value[ind])
-        self.check_constraints()
-        assert value == self.hyperparameters
-
-    def get_hyperparameters_metainfo(self):
-        # Dict per particle per particle:
-        # -min: Minimum value for this hyperparameter
-        # -max: Maximum value for this hyperparameter
-        # -change: Suggested change value
-        return [self._get_hyperparameters_metainfo_per_particle(ind) for ind in range(len(particle_names))]
+    seed: object = field(init=True, default=None)
 
     def _check_constraints(self):
-        assert(self.state>=0 and self.state<=2)
+        assert(self.state>=0 and self.state<=1)
 
-    def train_synthetic(self, synthetic_data):
-        if self.state > 0:
-            return
-        for d in synthetic_data:
-            d.unpack()
-        self._train_synthetic(synthetic_data)
-        for d in synthetic_data:
-            d.pack()
-        self.state = 1
-        self.check_constraints()
-        
-    def _train_synthetic(self, synthetic_data):
-        pass
-
-    def train_real(self, real_data, return_inferred_labels=False, test_data = None):
+    def train(self, train_data):
         if self.state>1:
             return
-        real_data = copy.deepcopy(real_data)
-        for d in real_data:
-            d.unpack()
-            for p in self.preprocessors:
-                p.process(d)
-        labels_output = self._train_real(real_data, return_inferred_labels, test_data)
-        for d in real_data:
-            d.pack()
-        self.state = 2
-        self.check_constraints()
-        if return_inferred_labels:
-            return labels_output
+        train_data = copy.deepcopy(train_data)
+        for d in train_data:
+            d.unload()
+        self._train(train_data)
+        self.state = 1
+        self.check_constraints()        
 
     def _train_real(self, real_data, return_inferred_labels, test_data):
         pass
 
     def infer(self, test_data):
-        assert self.state == 2
+        assert self.state == 1
         test_data = copy.deepcopy(test_data)
         for t in test_data:
-            t.labels  = []
+            t.labels  = pd.DataFrame()
         test_data = self._infer(test_data)
         for t in test_data:
             t.check_constraints()
@@ -397,71 +389,54 @@ class Model(BaseClass):
         # Subclass must implement this OR _infer_single
         if self.run_in_parallel:
             claim_gpu('')
-            p = multiprocess.Pool(recommend_n_workers())
-            #test_data = p.starmap(infer_internal_single_parallel, zip(test_data, itertools.repeat(self)))
-            dill_save(output_loc()+'parallel.pickle', self)
-            test_data = p.starmap(infer_internal_single_parallel, zip(test_data))
-            p.close()
-            return test_data
+            with multiprocess.Pool(recommend_n_workers()) as p:
+                dill_save(output_loc()+'parallel.pickle', self)
+                result = p.starmap(infer_internal_single_parallel, zip(test_data))            
         else:
             result = []
-            for xx in test_data:
-                if xx.name in self.infer_cache.keys():
-                    xx.labels = copy.deepcopy(self.infer_cache[xx.name])
-                    result.append(xx)
-                else:
-                    x = copy.deepcopy(xx)
-                    x.unpack()
-                    for p in self.preprocessors:
-                        p.process(x)
-                    xx = copy.deepcopy(self._infer_single(x))
-                    xx.pack()
-                    result.append(xx)
-                    x.pack()
-                    if self.fill_infer_cache:  
-                        self.infer_cache[xx.name] = copy.deepcopy(xx.labels)
-            return result        
+            for xx in test_data:     
+                t = time.time()
+                x = copy.deepcopy(xx)                
+                was_loaded = (x.loaded_state=='memory')                
+                if not was_loaded: x.load_to_memory()
+                profile_print(x.name + ' loading: ' + str(time.time()-t))
+                x = self._infer_single(x)
+                if not was_loaded: x.unload()
+                result.append(x)
+                profile_print(x.name + ' total infer time: ' + str(time.time()-t))
+        result = self._post_process(result)
+        return result
+
+    def _post_process(self, result):
+        return result
 
 
-# def write_submission_file(submission_data):
-#     # submission = pd.read_csv(data_dir() + '/sample_submission.csv')
-#     # submission = submission[0:0]
-#     # submission=submission.set_index("id")
+def write_submission_file(submission_data):   
+
+    #submission = pd.read_csv(data_dir + '/sample_submission.csv')
+    #print(submission)
+    #submission = submission[0:0]
+    #submission = submission.set_index("id")
     
-#     # ind = 0
-#     # for d in submission_data:
-#     #     for lab in d.labels:
-#     #         for r in range(lab.zyx.shape[0]):
-#     #             submission.loc[ind] = [d.name, particle_names[lab.particle_id], lab.zyx[r,2], lab.zyx[r,1], lab.zyx[r,0]]
-#     #             ind+=1
-
-#     # if running_on_kaggle==1:
-#     #     submission.to_csv('/kaggle/working/submission.csv')
-#     # else:
-#     #     submission.to_csv('d:/cz/submission.csv')
-
-#     submission = pd.read_csv(data_dir() + '/sample_submission.csv')
-#     submission = submission[0:0]
-#     submission = submission.set_index("id")
+    rows = []  # Collect rows as a list of lists or tuples
+    #ind = 0
     
-#     rows = []  # Collect rows as a list of lists or tuples
-#     ind = 0
+    for dat in submission_data:
+        if len(dat.labels)==0:
+            pass
+            rows.append([dat.name, -1, -1, -1])
+        else:
+            assert(len(dat.labels)==1)
+            lab = copy.deepcopy(dat.labels).reset_index()
+            rows.append([dat.name, lab['z'][0], lab['y'][0], lab['x'][0]])
     
-#     for d in submission_data:
-#         for lab in d.labels:
-#             for r in range(lab.zyx.shape[0]):
-#                 # Append a new row as a tuple
-#                 rows.append([ind, d.name, particle_names[lab.particle_id], lab.zyx[r, 2], lab.zyx[r, 1], lab.zyx[r, 0]])
-#                 ind += 1
-    
-#     # Create a new DataFrame from collected rows
-#     rows_df = pd.DataFrame(rows, columns=["id", "experiment", "particle_type", "x", "y", "z"])
-#     rows_df = rows_df.set_index("id")
+    # Create a new DataFrame from collected rows
+    rows_df = pd.DataFrame(rows, columns=["tomo_id", "Motor axis 0", "Motor axis 1", "Motor axis 2"])
+    #rows_df = rows_df.set_index("id")
 
-#     if running_on_kaggle==1:
-#         rows_df.to_csv('/kaggle/working/submission.csv')
-#     else:
-#         rows_df.to_csv('d:/cz/submission.csv')
+    print(rows_df)
+
+    rows_df.to_csv(output_dir + 'submission.csv', index=False)
 
 
 
