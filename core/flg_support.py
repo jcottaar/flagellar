@@ -195,20 +195,27 @@ class Data(BaseClass):
     is_train: bool = field(init=True, default=False)
     name: str = field(init=True, default='')
     labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
+    loaded_state: str = field(init=False, default='unloaded') # unloaded, h5py, memory
     data: object = field(init=False, default=None) # None, 3D np array, or h5py dataset
     voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom
     mean_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
     std_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
 
     def _check_constraints(self):
-        if not self.data is None:
+        if not self.loaded_state == 'unloaded':
             assert(len(self.data.shape)==3)
-            assert type(self.data)==np.ndarray or type(self.data)==h5py._hl.dataset.Dataset
+            if self.loaded_state == 'h5py':
+                assert type(self.data)==h5py._hl.dataset.Dataset
+            else:
+                assert self.loaded_state == 'memory'
+                assert type(self.data)==np.ndarray
             assert(self.mean_per_slice.shape==(self.data.shape[0],))
             assert(self.std_per_slice.shape==(self.data.shape[0],))
 
     def load_to_h5py(self):
         assert self.is_train
+
+        if self.loaded_state = 'h5py': return
         
         # Create h5py if needed
         if not os.path.isfile(h5py_cache_dir + self.name + '.h5'):
@@ -227,10 +234,13 @@ class Data(BaseClass):
         self.mean_per_slice = f['mean_per_slice'][...]
         self.std_per_slice = f['std_per_slice'][...]
 
+        self.loaded_state = 'h5py'
         self.check_constraints()
 
     #@profile_each_line
-    def load_to_memory(self):        
+    def load_to_memory(self):  
+        if self.loaded_state = 'memory': return
+        
         if self.is_train and os.path.isfile(h5py_cache_dir + self.name + '.h5'):
             # Load from cache
             with h5py.File(h5py_cache_dir + self.name + '.h5', 'r') as f:
@@ -256,10 +266,12 @@ class Data(BaseClass):
             self.std_per_slice = cp.asnumpy(cp.std(data_cp,axis=(1,2)))
 
         assert type(self.data)==np.ndarray
+        self.loaded_state = 'memory'
         self.check_constraints()
 
     def unload(self):
         self.data = None
+        self.loaded_state = 'unloaded'
         self.check_constraints()            
 
 def load_one_measurement(name, is_train, include_train_labels):
@@ -286,216 +298,130 @@ def load_all_train_data():
         if not name in['tomo_2b3cdf', 'tomo_62eea8', 'tomo_c84b8e', 'tomo_e6f7f7']: # mislabeled
             result.append(load_one_measurement(name, True, True))
     return result
-    
 
-# '''
-# Data definition and loading
-# '''
-# @dataclass
-# class Label(BaseClass):
-#     # Holds labels for a single class of particle
-#     particle_id: int = field(init=False, default=0) # linked to global particle_names
-#     zyx: np.ndarray = field(init=False, default_factory = lambda:np.ndarray([0,3]))
-#     shift: np.ndarray = field(init=False, default_factory = lambda:np.array([0,0,0]))
-#     notes: dict = field(init=False, default_factory = dict)
 
-#     def _check_constraints(self):
-#         assert(self.particle_id>=0 and self.particle_id<len(particle_names))
-#         assert(self.zyx.shape[1] == 3)
-#         assert(self.shift.shape == (3,))
+'''
+General model definition
+'''
+# Function is used below, I ran into issues with multiprocessing if it was not a top-level function
+model_parallel = None
+def infer_internal_single_parallel(data):    
+    try:
+        global model_parallel
+        if model_parallel is None:
+            model_parallel= dill_load(temp_dir+'parallel.pickle')
+        data.load_to_memory()
+        return_data = copy.deepcopy(model_parallel._infer_single(data))
+        return_data.unload()
+        return return_data
+    except Exception as err:
+        import traceback
+        print(traceback.format_exc())     
+        raise
 
-#     def select_indices(self,inds):
-#         self.zyx = self.zyx[inds,:]
-#         for key in self.notes:
-#             assert len(self.notes[key].shape) == 1 # todo
-#             self.notes[key] = self.notes[key][inds]
-    
-# @dataclass
-# class Data(BaseClass):
-#     # Holds one cryoET measurement, including ground truth or predicted labels
-#     data_zarr=0
-#     data: np.ndarray = field(init=False, default=0, repr=False) # 3D
-#     scale: np.ndarray = field(init=False, default=0) # scale of pixels, zyx
-#     labels: list  = field(init=False, default_factory=list, repr=False) # list of Label
-#     data_type: str = field(init=False, default='') # synthetic, train, test
-#     method: str = field(init=False, default='')
-#     name: str = field(init=False, default='') # folder name
-#     pack_count: int = field(init=False, default=0)
+@dataclass
+class Model(BaseClass):
+    # Loads one or more cryoET measuerements
+    state: int = field(init=False, default=0) # 0: untrained, 1: trained
+    quiet: bool = field(init=False, default=True)
+    run_in_parallel: bool = field(init=False, default=False)    
+    seed: int = field(init=False, default=42)
+    fill_infer_cache: bool = field(init=False, default=False)
+    infer_cache: dict = field(init=False, default_factory=dict)
 
-#     def _check_constraints(self):
-#         assert(len(self.data.shape)==3)
-#         assert(type(self.data_zarr) == zarr.hierarchy.Group)
-#         assert(self.scale.shape == (3,))
-#         assert(self.data_type == 'train' or self.data_type == 'test' or self.data_type == 'synthetic')
-#         assert(self.method == 'denoised' or self.method == 'ctfdeconvolved' or self.method == 'isonetcorrected' or self.method == 'wbp')
-#         if debugging_mode >= 2:
-#             for lab in self.labels:
-#                 assert isinstance(lab, Label)
-#                 lab.check_constraints()
+    @property
+    def hyperparameters(self):
+        return [self._get_hyperparameters_per_particle(ind) for ind in range(len(particle_names))]
 
-#     def unpack(self):
-#         if self.pack_count == 0:
-#             print('loading')
-#             self.data = self.data_zarr[0].get_basic_selection()
-#         self.pack_count = self.pack_count + 1
+    @hyperparameters.setter
+    def hyperparameters(self, value):
+        for ind in range(len(particle_names)):
+            self._set_hyperparameters_per_particle(ind,value[ind])
+        self.check_constraints()
+        assert value == self.hyperparameters
 
-#     def pack(self):
-#         self.pack_count = self.pack_count - 1
-#         if self.pack_count == 0:
-#             self.data = np.zeros((0,0,0))
+    def get_hyperparameters_metainfo(self):
+        # Dict per particle per particle:
+        # -min: Minimum value for this hyperparameter
+        # -max: Maximum value for this hyperparameter
+        # -change: Suggested change value
+        return [self._get_hyperparameters_metainfo_per_particle(ind) for ind in range(len(particle_names))]
 
-#     def rot90_xy(self):
-#         assert self.pack_count>0
-#         self.data = np.rot90(self.data, k=3, axes=(1,2))
-#         for lab in self.labels:
-#             midpoint_x = self.data.shape[2]*self.scale[2]/2
-#             midpoint_y = self.data.shape[1]*self.scale[1]/2
-#             lab.zyx = np.stack( (lab.zyx[:,0], lab.zyx[:,2]-midpoint_x+midpoint_y, -lab.zyx[:,1]+midpoint_x+midpoint_y) ).T
-#         self.check_constraints()
+    def _check_constraints(self):
+        assert(self.state>=0 and self.state<=2)
 
-#     def n_particles(self):
-#         n = 0
-#         for lab in self.labels:
-#             n = n+lab.zyx.shape[0]
-#         return n
+    def train_synthetic(self, synthetic_data):
+        if self.state > 0:
+            return
+        for d in synthetic_data:
+            d.unpack()
+        self._train_synthetic(synthetic_data)
+        for d in synthetic_data:
+            d.pack()
+        self.state = 1
+        self.check_constraints()
+        
+    def _train_synthetic(self, synthetic_data):
+        pass
 
-# @dataclass
-# class DataLoader(BaseClass):
-#     # Loads one or more cryoET measuerements
-#     names_to_load: list = field(init=False, default_factory=list) # if empty, will load all in directory
-#     data_type: str = field(init=False, default='') # synthetic, train, test
-#     method: str = field(init=False, default='denoised')
-#     include_labels: bool = field(init=False, default=False)
-#     unpack: bool = field(init=False, default=False)
+    def train_real(self, real_data, return_inferred_labels=False, test_data = None):
+        if self.state>1:
+            return
+        real_data = copy.deepcopy(real_data)
+        for d in real_data:
+            d.unpack()
+            for p in self.preprocessors:
+                p.process(d)
+        labels_output = self._train_real(real_data, return_inferred_labels, test_data)
+        for d in real_data:
+            d.pack()
+        self.state = 2
+        self.check_constraints()
+        if return_inferred_labels:
+            return labels_output
 
-#     def _check_constraints(self):
-#         assert(self.data_type == 'train' or self.data_type == 'test' or self.data_type == 'synthetic')
-#         assert(self.method == 'denoised' or self.method == 'ctfdeconvolved' or self.method == 'isonetcorrected' or self.method == 'wbp')
-#         if self.include_labels:
-#             assert(not self.data_type == 'test')
-#         if debugging_mode >= 2:
-#             for n in self.names_to_load:
-#                 assert isinstance(n,str)
+    def _train_real(self, real_data, return_inferred_labels, test_data):
+        pass
 
-#     def load(self):
-#         self.check_constraints()
-#         match self.data_type:
-#             case 'train':
-#                 base_dir = data_dir() + 'train/'
-#             case 'test':
-#                 base_dir = data_dir() + 'test/'
-#             case 'synthetic':
-#                 base_dir = data_dir() + '10441/'
-#         if len(self.names_to_load)==0:
-#             # Load all available files
-#             if self.data_type == 'synthetic':
-#                 paths = list(pathlib.Path(base_dir).glob('TS_*'));
-#                 self.names_to_load = [os.path.basename(str(p)) for p in paths]
-#             else:
-#                 paths = list(pathlib.Path(base_dir + 'static/ExperimentRuns/').glob('TS_*'));
-#                 self.names_to_load = [os.path.basename(str(p)) for p in paths]
-#             self.names_to_load.sort()
-#         data = [load_one_measurement(name, self.data_type, self.method, base_dir, self.include_labels) for name in self.names_to_load]
-#         if self.unpack:
-#             for d in data:
-#                 d.unpack()
-#         return data
+    def infer(self, test_data):
+        assert self.state == 2
+        test_data = copy.deepcopy(test_data)
+        for t in test_data:
+            t.labels  = []
+        test_data = self._infer(test_data)
+        for t in test_data:
+            t.check_constraints()
+        return test_data
 
-# def load_one_measurement(name, data_type, method, base_dir, include_labels):
-#     result = Data()
-#     result.data_type = data_type
-#     result.name = name
-#     result.method = method
-    
-#     # Load data
-#     if data_type == 'synthetic':
-#         data_dir = base_dir + '/' + name + '/Reconstructions/VoxelSpacing10.000/Tomograms/100/' + name + '.zarr'
-#     else:
-#         data_dir = base_dir+'/static/ExperimentRuns/'+name+'/VoxelSpacing10.000/' + method + '.zarr';
-#     result.data_zarr = zarr.open(data_dir)
-#     result.data = np.zeros((0,0,0))
-#     result.scale = np.array(result.data_zarr.attrs['multiscales'][0]['datasets'][0]['coordinateTransformations'][0]['scale'])
+    def _infer(self, test_data):
+        # Subclass must implement this OR _infer_single
+        if self.run_in_parallel:
+            claim_gpu('')
+            p = multiprocess.Pool(recommend_n_workers())
+            #test_data = p.starmap(infer_internal_single_parallel, zip(test_data, itertools.repeat(self)))
+            dill_save(output_loc()+'parallel.pickle', self)
+            test_data = p.starmap(infer_internal_single_parallel, zip(test_data))
+            p.close()
+            return test_data
+        else:
+            result = []
+            for xx in test_data:
+                if xx.name in self.infer_cache.keys():
+                    xx.labels = copy.deepcopy(self.infer_cache[xx.name])
+                    result.append(xx)
+                else:
+                    x = copy.deepcopy(xx)
+                    x.unpack()
+                    for p in self.preprocessors:
+                        p.process(x)
+                    xx = copy.deepcopy(self._infer_single(x))
+                    xx.pack()
+                    result.append(xx)
+                    x.pack()
+                    if self.fill_infer_cache:  
+                        self.infer_cache[xx.name] = copy.deepcopy(xx.labels)
+            return result        
 
-#     # Load labels
-#     if include_labels:
-#         if data_type == 'synthetic':
-#             pick_dir = base_dir + '/' + name + '/Reconstructions/VoxelSpacing10.000/Annotations/';
-#             for particle_ind in range(len(particle_names)):
-#                 filename = list(pathlib.Path(pick_dir + '10' + str(particle_ind+1) + '/').glob('*orientedpoint.*'));
-#                 assert(len(filename)==1); filename = filename[0];
-#                 f=open(filename, 'r', encoding='utf-8');
-#                 picks = ndjson.load(f)
-#                 f.close()
-#                 new_label = Label()
-#                 new_label.particle_id = particle_ind
-#                 # if apply_shifts:
-#                 #     if particle_ind == 2 or particle_ind == 3:
-#                 #         new_label.zyx = np.stack([np.array([-5,0,8])+10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks])                
-#                 #     elif particle_ind == 5:
-#                 #         new_label.zyx = np.stack([np.array([0,5,15])+10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks])   
-#                 #     else:
-#                 #         new_label.zyx = np.stack([np.array([0,5,13])+10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks])   
-#                 #     new_label.zyx = np.stack([np.array([0,0,10])+10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks]) 
-#                 # else:
-#                 #     new_label.zyx = np.stack([10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks]) 
-#                 new_label.zyx = np.stack([10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks]) 
-#                 new_label.shift = np.array([0,0,10])
-#                 # if particle_ind == 2 or particle_ind == 3:
-#                 #     new_label.zyx = np.stack([np.array([-5,0,8])+10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks])                
-#                 # elif particle_ind == 5:
-#                 #     new_label.zyx = np.stack([np.array([0,5,15])+10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks])   
-#                 # else:
-#                 #     new_label.zyx = np.stack([np.array([0,5,13])+10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks])   
-                    
-#                 #new_label.zyx = np.stack([10*np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks])   
-#                 result.labels.append(new_label)
-#         else:
-#             pick_dir = base_dir+'/overlay/ExperimentRuns/'+name+'/Picks/';
-#             for particle_ind in range(len(particle_names)):
-#                 filename = pick_dir + particle_names[particle_ind] + '.json';
-#                 f=open(filename, 'r', encoding='utf-8');
-#                 picks = json.load(f)
-#                 f.close()
-#                 new_label = Label()
-#                 new_label.particle_id = particle_ind
-#                 # if apply_shifts:
-#                 shift_matrix = [[0,2,3],[3,6,6],[-2,2,6],[0,6,2],[3,3,5],[5,5,3]]
-#                 #     new_label.zyx = np.stack([np.array(shift_matrix[particle_ind])+np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks['points']])     
-#                 # else:
-#                 #     new_label.zyx = np.stack([np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks['points']])   
-#                 new_label.zyx = np.stack([np.array([pk['location']['z'], pk['location']['y'], pk['location']['x']]) for pk in picks['points']])
-#                 new_label.shift = np.array(shift_matrix[particle_ind])
-#                 result.labels.append(new_label)
-
-#     result.check_constraints()
-#     return result
-
-# def load_all_data(unpack=True, include_synthetic=False):
-#     loader = DataLoader()
-#     loader.data_type = 'synthetic'
-#     loader.names_to_load = []
-#     loader.include_labels = True
-#     loader.unpack = unpack
-#     if include_synthetic:
-#         loaded_data_synthetic=loader.load();
-#     else:
-#         loaded_data_synthetic = []
-    
-#     loader = DataLoader()
-#     loader.data_type = 'train'
-#     loader.names_to_load = []
-#     loader.include_labels = True
-#     loader.unpack = unpack
-#     loaded_data_train=loader.load();
-    
-#     loader = DataLoader()
-#     loader.data_type = 'test'
-#     loader.names_to_load = []
-#     loader.include_labels = False
-#     loader.unpack = False
-#     loaded_data_test=loader.load();
-
-#     return loaded_data_synthetic, loaded_data_train, loaded_data_test
 
 # def write_submission_file(submission_data):
 #     # submission = pd.read_csv(data_dir() + '/sample_submission.csv')

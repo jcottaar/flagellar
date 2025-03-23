@@ -36,7 +36,7 @@ import monai
 
 @dataclass(slots=True)
 class DatasetTrain(torch.utils.data.IterableDataset):
-    seed: int = field(init=True, default=0)
+    seed: object = field(init=True, default=None)
 
     # Selection settings
     n_positive: int = field(init=True, default=1)
@@ -146,7 +146,7 @@ class UNetModel(fls.BaseClass):
     tversky_beta = 1.
 
     # Other
-    seed = 0
+    seed = None
     verbose = False
     deterministic_train = False
 
@@ -179,7 +179,9 @@ class UNetModel(fls.BaseClass):
         optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)   
 
         self.dataset.data_list = copy.deepcopy(train_data)
-        data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=1,pin_memory=True,persistent_workers=True))
+        if not self.seed is None:
+            self.dataset.seed = self.seed+1
+        data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=0,pin_memory=True,persistent_workers=True))
 
         scaler = torch.amp.GradScaler('cuda')
 
