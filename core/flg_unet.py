@@ -148,6 +148,7 @@ class UNetModel(fls.BaseClass):
     # Other
     seed = 0
     verbose = False
+    deterministic_train = False
 
     # Trained
     model = 0
@@ -156,14 +157,14 @@ class UNetModel(fls.BaseClass):
     train_loss_list1: list = field(init=True, default_factory=list)
     train_loss_list2: list = field(init=True, default_factory=list)
     
-    deterministic_train = False
+    
 
     def train(self,train_data):
         #TODO: half precision, mix losses, scheduler, augments, ensemble
         cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
 
         criterion1 = nn.BCEWithLogitsLoss()
-        criterion2 = monai.losses.TverskyLoss(smooth_nr=1e-05, smooth_dr=1e-05, batch=False, to_onehot_y=False, sigmoid=True, \
+        criterion2 = monai.losses.TverskyLoss(smooth_nr=1e-05, smooth_dr=1e-05, batch=True, to_onehot_y=False, sigmoid=True, \
                                                  alpha=self.tversky_alpha, beta=self.tversky_beta)
 
         model = flg_unet_resnet18_3layer.UNetResNet18_3D(num_classes=1)
@@ -188,21 +189,43 @@ class UNetModel(fls.BaseClass):
             running_loss2 = 0.0
             images, targets = next(data_loader)
             with torch.amp.autocast('cuda'):
-                for i_image in range(images.shape[0]):
-                    image_device = images[i_image:i_image+1,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
-                    target_device = targets[i_image:i_image+1,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
-                    output = model(image_device)                                    
+                N=4
+                for i_image in range(images.shape[0]//N):
+                    image_device = images[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                    target_device = targets[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                    output = model(image_device)  
+                    # for ii in range(N):
+                    #     loss1 = criterion1(output[ii,:,:,:,:], target_device[ii,:,:,:,:])
+                    #     loss2 = criterion2(output[ii,:,:,:,:], target_device[ii,:,:,:,:])   
+                    #     print(loss1.item(),loss2.item())
+                    #     #print(loss1.item(), loss2.item())
+                    #     running_loss1 += loss1.detach()/N
+                    #     running_loss2 += loss2.detach()/N
                     loss1 = criterion1(output, target_device)
-                    loss2 = criterion2(output, target_device)                                                
+                    loss2 = criterion2(output, target_device)  
                     running_loss1 += loss1.detach()
                     running_loss2 += loss2.detach()
+
+                    # alt_loss = 0
+                    # for ii in range(N):
+                    #     #loss2x = criterion1(output[ii,:,:,:,:], target_device[ii,:,:,:,:])
+                    #     loss2x = criterion2(output[ii,:,:,:,:], target_device[ii,:,:,:,:])   
+                    #     #print(loss1.item(),loss2.item())
+                    #     #print(loss1.item(), loss2.item())
+                    #     alt_loss += loss2x.detach()/N
+                    # print(loss2.item(),alt_loss.item())
+
+                    
+
+                    
     
                     loss = 0.004*loss1 + loss2
     
-                    scaler.scale(loss/images.shape[0]).backward()
+                    scaler.scale(N*loss/images.shape[0]).backward()
 
-            epoch_loss1 = running_loss1.item() / images.shape[0]
-            epoch_loss2 = running_loss2.item() / images.shape[0]            
+            epoch_loss1 = N*running_loss1.item() / images.shape[0]
+            epoch_loss2 = N*running_loss2.item() / images.shape[0]            
+            print(epoch_loss1, epoch_loss2)
             #loss.backward()
             #optimizer.step()            
             scaler.step(optimizer)
