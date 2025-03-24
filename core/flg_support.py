@@ -390,7 +390,7 @@ class Model(BaseClass):
         if self.run_in_parallel:
             claim_gpu('')
             with multiprocess.Pool(recommend_n_workers()) as p:
-                dill_save(output_loc()+'parallel.pickle', self)
+                dill_save(temp_dir+'parallel.pickle', self)
                 result = p.starmap(infer_internal_single_parallel, zip(test_data))            
         else:
             result = []
@@ -429,6 +429,13 @@ def write_submission_file(submission_data):
             assert(len(dat.labels)==1)
             lab = copy.deepcopy(dat.labels).reset_index()
             rows.append([dat.name, lab['z'][0], lab['y'][0], lab['x'][0]])
+
+    all_names = [d.name for d in load_all_test_data()]
+    seen_names = [r[0] for r in rows]
+    assert np.all([(name in all_names) for name in seen_names])
+    for name in all_names:
+        if not name in seen_names:
+            rows.append([name, -1,-1,-1])
     
     # Create a new DataFrame from collected rows
     rows_df = pd.DataFrame(rows, columns=["tomo_id", "Motor axis 0", "Motor axis 1", "Motor axis 2"])
