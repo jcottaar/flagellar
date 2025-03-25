@@ -73,7 +73,7 @@ match env:
 os.makedirs(temp_dir, exist_ok=True)
 os.makedirs(h5py_cache_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
-profiling = True
+profiling = False
 if is_submission:
     profiling = False
 
@@ -295,6 +295,8 @@ class Data(BaseClass):
 
     def unload(self):
         self.data = None
+        self.mean_per_slice = np.ndarray(0)
+        self.std_per_slice = np.ndarray(0)
         self.loaded_state = 'unloaded'
         self.check_constraints()            
 

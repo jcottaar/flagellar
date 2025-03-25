@@ -105,12 +105,12 @@ class ThreeStepModel(fls.Model):
             data.labels = data.labels[row:row+1]        
 
         print(data.labels)
-        if not fls.is_submission:
-            plt.figure()
-            plt.imshow(np.max(heatmap, axis=0), cmap='bone')
-            plt.colorbar()
-            #plt.clim([0,0.1])
-            plt.title(data.name)
+        # if not fls.is_submission:
+        #     plt.figure()
+        #     plt.imshow(np.max(heatmap, axis=0), cmap='bone')
+        #     plt.colorbar()
+        #     #plt.clim([0,0.1])
+        #     plt.title(data.name)
         return data
 
 
