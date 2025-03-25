@@ -85,6 +85,9 @@ class ThreeStepModel(fls.Model):
     step2Labels: object = field(init=True, default_factory=HeatMapToLocations)
     step3Output: object = field(init=True, default=None)
 
+    # Intermediate
+    data_after_step2 = 0
+
     # Internal
     run_to: int = field(init=True, default=0) # 0: run all, 1: stop after creating labels
 
@@ -98,6 +101,7 @@ class ThreeStepModel(fls.Model):
     def _infer_single(self,data):
         heatmap = self.step1Heatmap.infer(data)
         data.labels = self.step2Labels.make_labels(heatmap)
+        self.data_after_step2 = copy.deepcopy(data)
 
         data.labels = data.labels[data.labels['max_logit']>self.TEMP_threshold]
         if len(data.labels)>0:

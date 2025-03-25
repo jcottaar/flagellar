@@ -252,16 +252,21 @@ class UNetModel(fls.BaseClass):
 
         # Prepare data and output
         image = torch.tensor(data.data, dtype=torch.float16).to(device)
+        image = image[None,None,:,:,:]
+        pad_list = []
+        for dim in [2,1,0]:
+            pad_list.append(0)
+            pad_list.append(max(0,self.infer_size[dim]-image.shape[dim+2]))
+        image = F.pad(image, pad_list, mode="constant", value=0)
         if self.dataset.normalize:
             for ii in range(image.shape[0]):
-                image[ii,:,:] = (image[ii,:,:]-data.mean_per_slice[ii])/data.std_per_slice[ii]
-        image = image[None,None,:,:,:]
+                image[ii,:,:] = (image[ii,:,:]-data.mean_per_slice[ii])/data.std_per_slice[ii]        
         combined_probablity_map = torch.zeros((image.shape[2], image.shape[3], image.shape[4]),dtype=torch.float16).to(device)
         self.model.to(device)
         self.model.eval()
 
         def find_ranges(total_size, batch_size_infer, infer_edge_size):
-            assert total_size>batch_size_infer
+            assert total_size>=batch_size_infer
             ranges = [((0,batch_size_infer), (0,batch_size_infer-infer_edge_size), (0,batch_size_infer-infer_edge_size))]
             # part of input to use - part of result to use - where to insert in probablity_map
             cur_start = 0
@@ -277,6 +282,10 @@ class UNetModel(fls.BaseClass):
         ranges_z = find_ranges(image.shape[2], self.infer_size[0], self.infer_overlap)
         ranges_y = find_ranges(image.shape[3], self.infer_size[1], self.infer_overlap)
         ranges_x = find_ranges(image.shape[4], self.infer_size[2], self.infer_overlap)
+
+        print(ranges_z)
+        print(ranges_y)
+        print(ranges_x)
 
         with torch.no_grad(), torch.amp.autocast('cuda'):
             for rx in ranges_x:
