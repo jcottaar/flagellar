@@ -64,10 +64,10 @@ match env:
         output_dir = '/kaggle/working/'
         loader_threads = 8
     case 'vast':
-        data_dir = '/kaggle/data/'
-        temp_dir = '/kaggle/temp/'
-        h5py_cache_dir = '/kaggle/cache'
-        model_dir = '/kaggle/models/'
+        data_dir = '/flagellar/data/'
+        temp_dir = '/flagellar/temp/'
+        h5py_cache_dir = '/flagellar/cache/'
+        model_dir = '/flagellar/models/'
         output_dir = temp_dir
         loader_threads = 32
 os.makedirs(temp_dir, exist_ok=True)
@@ -148,7 +148,7 @@ def dill_save(filename, data):
 
 def prep_pytorch(seed, deterministic, deterministic_needs_cpu):
     if seed is None:
-        seed = np.random.default_rng(seed=None).integers(0,1e6)
+        seed = np.random.default_rng(seed=None).integers(0,1e6).item()
     import random
     random.seed(seed)
     np.random.seed(seed)
@@ -316,12 +316,17 @@ def load_one_measurement(name, is_train, include_train_labels):
     result.check_constraints()    
     return result
 
-def load_all_train_data():
-    directories = glob.glob(data_dir + 'train/tomo*')
+def load_all_train_data():    
+    if env=='vast':
+        directories = glob.glob(h5py_cache_dir + '*.h5')
+    else:
+        directories = glob.glob(data_dir + 'train/tomo*')
     directories.sort()
     result = []
     for d in directories:
         name = d[max(d.rfind('\\'), d.rfind('/'))+1:]
+        if env=='vast':
+            name = name[:-3]
         if not name in['tomo_2b3cdf', 'tomo_62eea8', 'tomo_c84b8e', 'tomo_e6f7f7']: # mislabeled
             result.append(load_one_measurement(name, True, True))
     return result
