@@ -108,7 +108,7 @@ class ThreeStepModel(fls.Model):
             row = np.argmax(data.labels['max_logit'].to_numpy())
             data.labels = data.labels[row:row+1]        
 
-        print(data.labels)
+        # print(data.labels)
         # if not fls.is_submission:
         #     plt.figure()
         #     plt.imshow(np.max(heatmap, axis=0), cmap='bone')

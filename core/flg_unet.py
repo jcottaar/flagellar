@@ -151,6 +151,7 @@ class UNetModel(fls.BaseClass):
     seed = None
     verbose = False
     deterministic_train = False
+    save_model_every = 100
 
     # Trained
     model = 0
@@ -188,7 +189,7 @@ class UNetModel(fls.BaseClass):
         scaler = torch.amp.GradScaler('cuda')
 
         for i_epoch in range(self.n_epochs):
-            print(i_epoch)
+            print(i_epoch, end=' ')
             running_loss1 = 0.0
             running_loss2 = 0.0
             images, targets = next(data_loader)
@@ -229,7 +230,7 @@ class UNetModel(fls.BaseClass):
 
             epoch_loss1 = N*running_loss1.item() / images.shape[0]
             epoch_loss2 = N*running_loss2.item() / images.shape[0]            
-            print(epoch_loss1, epoch_loss2)
+            #print(epoch_loss1, epoch_loss2)
             #loss.backward()
             #optimizer.step()            
             scaler.step(optimizer)
@@ -239,6 +240,12 @@ class UNetModel(fls.BaseClass):
             self.train_loss_list2.append(epoch_loss2)
 
             optimizer.zero_grad()
+
+            if not self.save_model_every is None and (i_epoch+1)%self.save_model_every==0:
+                model_save = copy.deepcopy(model)
+                model_save.to(cpu)
+                model_save.eval()
+                fls.dill_save(fls.temp_dir + 'intermediate_model_' + str(i_epoch+1) + '.pickle', model_save)
 
         model.to(cpu)
         model.eval()
@@ -296,7 +303,6 @@ class UNetModel(fls.BaseClass):
 
         del image
         gc.collect()
-        print(combined_probablity_map.shape)
         return combined_probablity_map.to(torch.float32).detach().cpu().numpy()
 
         
