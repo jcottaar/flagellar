@@ -38,7 +38,7 @@ class HeatMapToLocations(fls.BaseClass):
     # Trained
     state = 0 # 0 is uncalibrated, 1 is calibrated
 
-    @fls.profile_each_line
+    #@fls.profile_each_line
     def make_labels(self, heatmap):
         rows_list = []
         
@@ -74,6 +74,37 @@ class HeatMapToLocations(fls.BaseClass):
         if self.state==1:
             raise 'todo'
         return labels
+
+@dataclass
+class SelectSingleMotors(fls.BaseClass):
+    max_logit_threshold: float = field(init=True, default = 0.)
+
+    def select_motors(self,d):
+        d.labels = copy.deepcopy(d.labels_unfiltered)
+        d.labels = d.labels[d.labels['max_logit']>self.max_logit_threshold]
+        if len(d.labels)>0:
+            row = np.argmax(d.labels['max_logit'].to_numpy())
+            d.labels = d.labels[row:row+1]        
+
+    def calibrate(self, data, reference_data):
+        thresholds_try = np.linspace(-10,100,100)
+        scores = []
+        for t in thresholds_try:
+            data_try = copy.deepcopy(data)
+            self.max_logit_threshold = t
+            for d in data_try:
+                self.select_motors(d)
+            scores.append(fls.score_competition_metric(data_try, reference_data))
+            
+        plt.figure()
+        plt.plot(thresholds_try,scores)
+        plt.xlabel('Max logit threshold')
+        plt.ylabel('Score')
+        plt.grid(True)
+        self.max_logit_threshold = thresholds_try[np.argmax(scores)]
+        
+
+        
         
 @dataclass
 class ThreeStepModel(fls.Model):
@@ -83,7 +114,7 @@ class ThreeStepModel(fls.Model):
     # 3) select a subset as output (optionally one per tomogram)
     step1Heatmap: object = field(init=True, default_factory=flg_unet.UNetModel)
     step2Labels: object = field(init=True, default_factory=HeatMapToLocations)
-    step3Output: object = field(init=True, default=None)
+    step3Output: object = field(init=True, default_factory=SelectSingleMotors)
 
     # Intermediate
     data_after_step2 = 0
@@ -93,20 +124,32 @@ class ThreeStepModel(fls.Model):
 
     TEMP_threshold = 20.
 
-    def _train(self, train_data):
+    def _train(self, train_data, validation_data):
         if self.step1Heatmap.model==0:
             self.step1Heatmap.train(train_data)
 
-    
-    def _infer_single(self,data):
-        heatmap = self.step1Heatmap.infer(data)
-        data.labels_unfiltered = self.step2Labels.make_labels(heatmap)
+        self_temp = copy.deepcopy(self)
+        self_temp.run_to = 1
+        self_temp.state = 1
+        self.data_after_step2 = self_temp.infer(validation_data)
+        fls.mark_tf_pn(self.data_after_step2, validation_data)
 
-        data.labels = copy.deepcopy(data.labels_unfiltered)
-        data.labels = data.labels[data.labels['max_logit']>self.TEMP_threshold]
-        if len(data.labels)>0:
-            row = np.argmax(data.labels['max_logit'].to_numpy())
-            data.labels = data.labels[row:row+1]        
+        self.step3Output.calibrate(self.data_after_step2, validation_data)
+
+    
+    def _infer_single(self,data):   
+        if not self.data_after_step2 == 0:
+            prev_names = [d.name for d in self.data_after_step2]
+        if self.data_after_step2 == 0 or not data.name in prev_names:
+                heatmap = self.step1Heatmap.infer(data)
+                data.labels_unfiltered = self.step2Labels.make_labels(heatmap)
+        else:
+            for d in self.data_after_step2:
+                if d.name == data.name:
+                    data.labels_unfiltered = d.labels_unfiltered
+
+        if self.run_to==0:
+            self.step3Output.select_motors(data)
 
         # print(data.labels)
         # if not fls.is_submission:

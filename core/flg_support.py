@@ -29,6 +29,7 @@ import glob
 import cv2
 import h5py
 import time
+import sklearn
 
 
 '''
@@ -383,13 +384,16 @@ class Model(BaseClass):
     def _check_constraints(self):
         assert(self.state>=0 and self.state<=1)
 
-    def train(self, train_data):
+    def train(self, train_data, validation_data):
         if self.state>1:
             return
         train_data = copy.deepcopy(train_data)
+        validation_data = copy.deepcopy(validation_data)
         for d in train_data:
             d.unload()
-        self._train(train_data)
+        for d in validation_data:
+            d.unload()
+        self._train(train_data, validation_data)
         self.state = 1
         self.check_constraints()        
 
@@ -501,6 +505,84 @@ def write_submission_file(submission_data):
     rows_df = create_submission_dataframe(submission_data)
     print(rows_df)
     rows_df.to_csv(output_dir + 'submission.csv', index=False)
+
+
+def score_competition_metric(data, reference_data):
+    def distance_metric(
+        solution: pd.DataFrame,
+        submission: pd.DataFrame,
+        thresh_ratio: float,
+        min_radius: float,
+    ):
+        coordinate_cols = ['Motor axis 0', 'Motor axis 1', 'Motor axis 2']
+        label_tensor = solution[coordinate_cols].values.reshape(len(solution), -1, len(coordinate_cols))
+        predicted_tensor = submission[coordinate_cols].values.reshape(len(submission), -1, len(coordinate_cols))
+        # Find the minimum euclidean distances between the true and predicted points
+        solution['distance'] = np.linalg.norm(label_tensor - predicted_tensor, axis=2).min(axis=1)
+        # Convert thresholds from angstroms to voxels
+        solution['thresholds'] = solution['Voxel spacing'].apply(lambda x: (min_radius * thresh_ratio) / x)
+        solution['predictions'] = submission['Has motor'].values
+        solution.loc[(solution['distance'] > solution['thresholds']) & (solution['Has motor'] == 1) & (submission['Has motor'] == 1), 'predictions'] = 0
+        return solution['predictions'].values
+        
+    def score(solution: pd.DataFrame, submission: pd.DataFrame, min_radius: float, beta: float) -> float:
+        """
+        Parameters:
+        solution (pd.DataFrame): DataFrame containing ground truth motor positions.
+        submission (pd.DataFrame): DataFrame containing predicted motor positions.
+    
+        Returns:
+        float: FBeta score.
+    
+        Example
+        --------
+        >>> solution = pd.DataFrame({
+        ...     'tomo_id': [0, 1, 2, 3],
+        ...     'Motor axis 0': [-1, 250, 100, 200],
+        ...     'Motor axis 1': [-1, 250, 100, 200],
+        ...     'Motor axis 2': [-1, 250, 100, 200],
+        ...     'Voxel spacing': [10, 10, 10, 10],
+        ...     'Has motor': [0, 1, 1, 1]
+        ... })
+        >>> submission = pd.DataFrame({
+        ...     'tomo_id': [0, 1, 2, 3],
+        ...     'Motor axis 0': [100, 251, 600, -1],
+        ...     'Motor axis 1': [100, 251, 600, -1],
+        ...     'Motor axis 2': [100, 251, 600, -1]
+        ... })
+        >>> score(solution, submission, 1000, 2)
+        0.3571428571428571
+        """
+    
+        solution = solution.sort_values('tomo_id').reset_index(drop=True)
+        submission = submission.sort_values('tomo_id').reset_index(drop=True)
+    
+        filename_equiv_array = solution['tomo_id'].eq(submission['tomo_id'], fill_value=0).values
+    
+        if np.sum(filename_equiv_array) != len(solution['tomo_id']):
+            raise ValueError('Submitted tomo_id values do not match the sample_submission file')
+    
+        submission['Has motor'] = 1
+        # If any columns are missing an axis, it's marked with no motor
+        select = (submission[['Motor axis 0', 'Motor axis 1', 'Motor axis 2']] == -1).any(axis='columns')
+        submission.loc[select, 'Has motor'] = 0
+    
+        cols = ['Has motor', 'Motor axis 0', 'Motor axis 1', 'Motor axis 2']
+        assert all(col in submission.columns for col in cols)
+    
+        # Calculate a label of 0 or 1 using the 'has motor', and 'motor axis' values
+        predictions = distance_metric(
+            solution,
+            submission,
+            thresh_ratio=1.0,
+            min_radius=min_radius,
+        )
+    
+        return sklearn.metrics.fbeta_score(solution['Has motor'].values, predictions, beta=beta)
+
+    row_df_sub = create_submission_dataframe(data, reference_data = reference_data)
+    row_df_ref = create_submission_dataframe(reference_data, reference_data = reference_data, include_voxel_spacing=True)
+    return score(row_df_ref, row_df_sub, 1000, 2)
 
 
 

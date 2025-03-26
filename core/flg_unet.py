@@ -166,8 +166,6 @@ class UNetModel(fls.BaseClass):
     train_loss_list2: list = field(init=True, default_factory=list)
     
     
-
-    @fls.profile_each_line
     def train(self,train_data):
         #TODO: scheduler, augments, ensemble
         cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
