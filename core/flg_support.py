@@ -419,9 +419,9 @@ class Model(BaseClass):
         return result
 
 
-def write_submission_file(submission_data):   
+def create_submission_dataframe(submission_data, reference_data = load_all_test_data(), include_voxel_spacing = False):
 
-    #submission = pd.read_csv(data_dir + '/sample_submission.csv')
+     #submission = pd.read_csv(data_dir + '/sample_submission.csv')
     #print(submission)
     #submission = submission[0:0]
     #submission = submission.set_index("id")
@@ -432,25 +432,41 @@ def write_submission_file(submission_data):
     for dat in submission_data:
         if len(dat.labels)==0:
             pass
-            rows.append([dat.name, -1, -1, -1])
+            if include_voxel_spacing:
+                rows.append([dat.name, -1,-1,-1,10,0])
+            else:
+                rows.append([dat.name, -1,-1,-1])
         else:
             assert(len(dat.labels)==1)
             lab = copy.deepcopy(dat.labels).reset_index()
-            rows.append([dat.name, lab['z'][0], lab['y'][0], lab['x'][0]])
+            if include_voxel_spacing:
+                rows.append([dat.name, lab['z'][0], lab['y'][0], lab['x'][0], dat.voxel_spacing, 1])
+            else:
+                rows.append([dat.name, lab['z'][0], lab['y'][0], lab['x'][0]])
 
-    all_names = [d.name for d in load_all_test_data()]
+    all_names = [d.name for d in reference_data]
     seen_names = [r[0] for r in rows]
     assert np.all([(name in all_names) for name in seen_names])
     for name in all_names:
         if not name in seen_names:
-            rows.append([name, -1,-1,-1])
+            if include_voxel_spacing:
+                rows.append([name, -1,-1,-1,10,0])
+            else:
+                rows.append([name, -1,-1,-1])
     
     # Create a new DataFrame from collected rows
-    rows_df = pd.DataFrame(rows, columns=["tomo_id", "Motor axis 0", "Motor axis 1", "Motor axis 2"])
+    if include_voxel_spacing:
+        rows_df = pd.DataFrame(rows, columns=["tomo_id", "Motor axis 0", "Motor axis 1", "Motor axis 2", "Voxel spacing", "Has motor"])
+    else:
+        rows_df = pd.DataFrame(rows, columns=["tomo_id", "Motor axis 0", "Motor axis 1", "Motor axis 2"])
     #rows_df = rows_df.set_index("id")
 
-    print(rows_df)
+    return rows_df
 
+def write_submission_file(submission_data):   
+
+    rows_df = create_submission_dataframe(submission_data)
+    print(rows_df)
     rows_df.to_csv(output_dir + 'submission.csv', index=False)
 
 
