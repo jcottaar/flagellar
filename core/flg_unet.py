@@ -76,7 +76,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 loc = np.argwhere([x==all_train_labels['tomo_id'][row] for x in names])
                 assert(loc.shape == (1,1))
                 dataset = self.data_list[loc[0,0]]
-                coords = [all_train_labels['z'][row], all_train_labels['y'][row], all_train_labels['x'][row]]                
+                coords = [int(all_train_labels['z'][row]), int(all_train_labels['y'][row]), int(all_train_labels['x'][row])]                
                 for i in range(3):
                     coords[i] = coords[i] + rng.integers(-self.offset_range_for_pos[i], self.offset_range_for_pos[i])
                     if coords[i]<self.size[i]//2: coords[i] = self.size[i]//2                    
@@ -116,7 +116,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
             mask = np.zeros_like(zz, dtype=np.float32)
             mask[np.sqrt(zz**2+yy**2+xx**2) < radius_pix] = 1.
             for row in range(len(dataset.labels)):
-                offset = np.array([dataset.labels['z'][row], dataset.labels['y'][row], dataset.labels['x'][row]]) - coords + np.array(self.size)//2
+                offset = np.array([int(dataset.labels['z'][row]), int(dataset.labels['y'][row]), int(dataset.labels['x'][row])]) - coords + np.array(self.size)//2
                 flg_numerics.add_matrix_with_offset(target,mask,offset)               
             target[target>1]=1
 

@@ -284,11 +284,15 @@ class Data(BaseClass):
             imgs = list(loading_executor.map(load_image, files))            
             self.data = np.stack(imgs)
 
-            claim_gpu('cupy')
-            import cupy as cp            
-            data_cp = cp.array(self.data)
-            self.mean_per_slice = cp.asnumpy(cp.mean(data_cp,axis=(1,2)))
-            self.std_per_slice = cp.asnumpy(cp.std(data_cp,axis=(1,2)))
+            if env=='vast':
+                self.mean_per_slice = np.mean(self.data,axis=(1,2))
+                self.std_per_slice = np.std(self.data,axis=(1,2))
+            else:
+                claim_gpu('cupy')
+                import cupy as cp            
+                data_cp = cp.array(self.data)
+                self.mean_per_slice = cp.asnumpy(cp.mean(data_cp,axis=(1,2)))
+                self.std_per_slice = cp.asnumpy(cp.std(data_cp,axis=(1,2)))
 
         assert type(self.data)==np.ndarray
         self.loaded_state = 'memory'
@@ -318,16 +322,16 @@ def load_one_measurement(name, is_train, include_train_labels):
     return result
 
 def load_all_train_data():    
-    if env=='vast':
-        directories = glob.glob(h5py_cache_dir + '*.h5')
-    else:
-        directories = glob.glob(data_dir + 'train/tomo*')
+    #if env=='vast':
+    #    directories = glob.glob(h5py_cache_dir + '*.h5')
+    #else:
+    directories = glob.glob(data_dir + 'train/tomo*')
     directories.sort()
     result = []
     for d in directories:
         name = d[max(d.rfind('\\'), d.rfind('/'))+1:]
-        if env=='vast':
-            name = name[:-3]
+        # if env=='vast':
+        #     name = name[:-3]
         if not name in['tomo_2b3cdf', 'tomo_62eea8', 'tomo_c84b8e', 'tomo_e6f7f7']: # mislabeled
             result.append(load_one_measurement(name, True, True))
     return result
