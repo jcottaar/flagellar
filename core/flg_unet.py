@@ -283,10 +283,6 @@ class UNetModel(fls.BaseClass):
         ranges_y = find_ranges(image.shape[3], self.infer_size[1], self.infer_overlap)
         ranges_x = find_ranges(image.shape[4], self.infer_size[2], self.infer_overlap)
 
-        print(ranges_z)
-        print(ranges_y)
-        print(ranges_x)
-
         with torch.no_grad(), torch.amp.autocast('cuda'):
             for rx in ranges_x:
                 for ry in ranges_y:

@@ -100,9 +100,9 @@ class ThreeStepModel(fls.Model):
     
     def _infer_single(self,data):
         heatmap = self.step1Heatmap.infer(data)
-        data.labels = self.step2Labels.make_labels(heatmap)
-        self.data_after_step2 = copy.deepcopy(data)
+        data.labels_unfiltered = self.step2Labels.make_labels(heatmap)
 
+        data.labels = copy.deepcopy(data.labels_unfiltered)
         data.labels = data.labels[data.labels['max_logit']>self.TEMP_threshold]
         if len(data.labels)>0:
             row = np.argmax(data.labels['max_logit'].to_numpy())

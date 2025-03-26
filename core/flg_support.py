@@ -216,6 +216,7 @@ class Data(BaseClass):
     is_train: bool = field(init=True, default=False)
     name: str = field(init=True, default='')
     labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
+    labels_unfiltered: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     loaded_state: str = field(init=False, default='unloaded') # unloaded, h5py, memory
     data: object = field(init=False, default=None) # None, 3D np array, or h5py dataset
     voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom
