@@ -53,18 +53,8 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 
     #@fls.profile_each_line
     def __iter__(self): 
-        rng = np.random.default_rng(seed=self.seed)
-        for d in self.data_list:
-            d.load_to_h5py()
-        volumes = np.array([np.prod(d.data.shape) for d in self.data_list]).astype(np.float64)
-        names = [d.name for d in self.data_list]     
-        tl = []
-        for d in self.data_list:
-            tl.append(copy.deepcopy(d.labels))
-            tl[-1]['tomo_id'] = d.name
-        all_train_labels = pd.concat(tl, axis=0).reset_index()
-        
-        for i_set in itertools.count():     
+        #@fls.profile_each_line
+        def get_next():
             #t=time.time()
             # Determine which location in which tomogram we will use
             if i_set%(self.n_positive+self.n_random)<self.n_positive:
@@ -92,6 +82,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                     coords.append(rng.integers(self.size[i]//2, dataset.data.shape[i]-self.size[i]//2-1))
                 #print(dataset.name,dataset.data.shape,coords)
 
+            #print(dataset.name)
             #print('1', t-time.time())
             # Pick the tomogram data            
             slices = []
@@ -126,7 +117,21 @@ class DatasetTrain(torch.utils.data.IterableDataset):
             target = torch.tensor(target, dtype=torch.float16)
 
             #print('4', t-time.time())
-            yield image, target
+            return image, target
+                
+        rng = np.random.default_rng(seed=self.seed)
+        for d in self.data_list:
+            d.load_to_h5py()
+        volumes = np.array([np.prod(d.data.shape) for d in self.data_list]).astype(np.float64)
+        names = [d.name for d in self.data_list]     
+        tl = []
+        for d in self.data_list:
+            tl.append(copy.deepcopy(d.labels))
+            tl[-1]['tomo_id'] = d.name
+        all_train_labels = pd.concat(tl, axis=0).reset_index()
+        
+        for i_set in itertools.count():     
+            yield get_next()
 
 
 @dataclass
@@ -162,8 +167,9 @@ class UNetModel(fls.BaseClass):
     
     
 
+    @fls.profile_each_line
     def train(self,train_data):
-        #TODO: half precision, mix losses, scheduler, augments, ensemble
+        #TODO: scheduler, augments, ensemble
         cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
 
         criterion1 = nn.BCEWithLogitsLoss()

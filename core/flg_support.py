@@ -238,11 +238,20 @@ class Data(BaseClass):
         assert self.is_train
 
         if self.loaded_state == 'h5py': return
+
+        filename = h5py_cache_dir + self.name + '.h5'
+        if env == 'kaggle':
+            filename = '/kaggle/input/byu-flagellar-motors-as-h5py/' + self.name + '.h5';
+            if not os.path.isfile(filename):
+                filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-2/' + self.name + '.h5';
+                if not os.path.isfile(filename):
+                    filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-3/' + self.name + '.h5';
+                    assert os.path.isfile(filename)  
         
         # Create h5py if needed
-        if not os.path.isfile(h5py_cache_dir + self.name + '.h5'):
-            self.load_to_memory()
-            with h5py.File(h5py_cache_dir + self.name + '.h5', 'w') as f:
+        if not os.path.isfile(filename):
+            self.load_to_memory()                  
+            with h5py.File(filename, 'w') as f:
                 dset=f.create_dataset('data', shape = self.data.shape, dtype='uint8')
                 dset[...] = self.data
                 dset=f.create_dataset('mean_per_slice', shape = self.mean_per_slice.shape, dtype='float64')
@@ -251,7 +260,7 @@ class Data(BaseClass):
                 dset[...] = self.std_per_slice
 
         # Import h5py
-        f = h5py.File(h5py_cache_dir + self.name + '.h5', 'r')
+        f = h5py.File(filename, 'r')
         self.data = f['data']
         self.mean_per_slice = f['mean_per_slice'][...]
         self.std_per_slice = f['std_per_slice'][...]
@@ -317,7 +326,7 @@ def load_one_measurement(name, is_train, include_train_labels):
             assert result.labels['x'][0]==-1
             assert len(result.labels)==1
             result.labels = result.labels[0:0]
-        result.voxel_spacing = all_train_labels[all_train_labels['tomo_id']=='tomo_003acc'].reset_index()[0:1][['Voxel spacing']].to_numpy()[0,0]
+        result.voxel_spacing = all_train_labels[all_train_labels['tomo_id']==name].reset_index()[0:1][['Voxel spacing']].to_numpy()[0,0]
     result.check_constraints()    
     return result
 
