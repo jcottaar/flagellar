@@ -126,7 +126,7 @@ class ThreeStepModel(fls.Model):
 
     def _train(self, train_data, validation_data):
         if self.step1Heatmap.model==0:
-            self.step1Heatmap.train(train_data)
+            self.step1Heatmap.train(train_data, validation_data)
 
         self_temp = copy.deepcopy(self)
         self_temp.run_to = 1

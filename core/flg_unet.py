@@ -50,6 +50,13 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     radius: float = field(init=True, default=200.) # in angstrom, not pixels!
     reproduce_voxel_bug: bool = field(init=True, default=False)
 
+    # Augments
+    rotate_xy_90 = 0.
+    rotate_xy_180 = 0.
+    rotate_xz_180 = 0.
+    flip_x = 0.
+    
+
     data_list: list = field(init=True, default_factory=list)
     
 
@@ -118,10 +125,25 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 flg_numerics.or_matrix_with_offset(target,mask,offset)               
             #target[target>1]=1
 
+            # Augment
+            augment_functions = []
+            if rng.uniform()<self.rotate_xy_90:
+                augment_functions.append(lambda x:np.rot90(x, axes=(1,2)))
+            if rng.uniform()<self.rotate_xy_180:
+                augment_functions.append(lambda x:np.rot90(x, k=2, axes=(1,2)))
+            if rng.uniform()<self.rotate_xz_180:
+                augment_functions.append(lambda x:np.rot90(x, k=2, axes=(0,2)))
+            if rng.uniform()<self.flip_x:
+                augment_functions.append(lambda x:np.flip(x, axis=2))
+            for f in augment_functions:
+                image = f(image)
+                target = f(target)
+            
+
             #print('3', t-time.time())
 
-            image = torch.tensor(image, dtype=torch.float16)
-            target = torch.tensor(target, dtype=torch.bool)
+            image = torch.tensor(image.copy(), dtype=torch.float16)
+            target = torch.tensor(target.copy(), dtype=torch.bool)
 
             #print('4', t-time.time())
             return image, target
@@ -155,6 +177,7 @@ class UNetModel(fls.BaseClass):
     # Loss
     tversky_alpha = 1.
     tversky_beta = 1.
+    entropy_weight = 0.
 
     # Inference
     infer_size: tuple = field(init=True, default=(256,256,256))
@@ -165,6 +188,9 @@ class UNetModel(fls.BaseClass):
     verbose = False
     deterministic_train = False
     save_model_every = 100
+    plot_every = 100
+    n_images_test = 100
+    test_loss_every = 10
 
     # Trained
     model = 0
@@ -172,9 +198,11 @@ class UNetModel(fls.BaseClass):
     # Diagnostics
     train_loss_list1: list = field(init=True, default_factory=list)
     train_loss_list2: list = field(init=True, default_factory=list)
+    test_loss_epochs: list = field(init=True, default_factory=list)
+    test_loss_list2: list = field(init=True, default_factory=list)
     
-    def train(self,train_data):
-        #TODO: scheduler, augments, ensemble
+    def train(self,train_data,validation_data):
+        #TODO: scheduler, augments, ensemble, entropy weighting
         cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
 
         criterion1 = nn.BCEWithLogitsLoss()
@@ -192,6 +220,10 @@ class UNetModel(fls.BaseClass):
         
         optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)   
 
+        dataset_test = copy.deepcopy(self.dataset)
+        dataset_test.data_list = copy.deepcopy(validation_data)
+        data_loader_test = iter(torch.utils.data.DataLoader(dataset_test,batch_size=self.n_images_test,num_workers=1,pin_memory=True,persistent_workers=True))
+
         self.dataset.data_list = copy.deepcopy(train_data)
         if not self.seed is None:
             self.dataset.seed = self.seed+1
@@ -205,42 +237,23 @@ class UNetModel(fls.BaseClass):
             running_loss2 = 0.0
             images, targets = next(data_loader)
             with torch.amp.autocast('cuda'):
-                N=4
+                N=self.dataset.n_positive + self.dataset.n_random
                 for i_image in range(images.shape[0]//N):
                     image_device = images[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
                     target_device = targets[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
                     output = model(image_device)  
-                    # for ii in range(N):
-                    #     loss1 = criterion1(output[ii,:,:,:,:], target_device[ii,:,:,:,:])
-                    #     loss2 = criterion2(output[ii,:,:,:,:], target_device[ii,:,:,:,:])   
-                    #     print(loss1.item(),loss2.item())
-                    #     #print(loss1.item(), loss2.item())
-                    #     running_loss1 += loss1.detach()/N
-                    #     running_loss2 += loss2.detach()/N
                     loss1 = criterion1(output, target_device)
                     loss2 = criterion2(output, target_device)  
                     running_loss1 += loss1.detach()
                     running_loss2 += loss2.detach()
-
-                    # alt_loss = 0
-                    # for ii in range(N):
-                    #     #loss2x = criterion1(output[ii,:,:,:,:], target_device[ii,:,:,:,:])
-                    #     loss2x = criterion2(output[ii,:,:,:,:], target_device[ii,:,:,:,:])   
-                    #     #print(loss1.item(),loss2.item())
-                    #     #print(loss1.item(), loss2.item())
-                    #     alt_loss += loss2x.detach()/N
-                    # print(loss2.item(),alt_loss.item())
-
-                    
-
-                    
-    
-                    loss = 0.004*loss1 + loss2
-    
+                    loss = self.entropy_weight*loss1 + loss2
                     scaler.scale(N*loss/images.shape[0]).backward()
+
 
             epoch_loss1 = N*running_loss1.item() / images.shape[0]
             epoch_loss2 = N*running_loss2.item() / images.shape[0]            
+            del images
+            del targets
             #print(epoch_loss1, epoch_loss2)
             #loss.backward()
             #optimizer.step()            
@@ -252,20 +265,47 @@ class UNetModel(fls.BaseClass):
 
             optimizer.zero_grad()
 
+            if (i_epoch+1)%self.test_loss_every==0:
+                running_loss1 = 0.0
+                running_loss2 = 0.0
+                images, targets = next(data_loader_test)                
+                with torch.no_grad(), torch.amp.autocast('cuda'):
+                    N=self.dataset.n_positive + self.dataset.n_random
+                    for i_image in range(images.shape[0]//N):
+                        image_device = images[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                        target_device = targets[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                        output = model(image_device)  
+                        loss1 = criterion1(output, target_device)
+                        loss2 = criterion2(output, target_device)  
+                        running_loss1 += loss1.detach()
+                        running_loss2 += loss2.detach()              
+
+                
+                epoch_loss1 = N*running_loss1.item() / images.shape[0]
+                epoch_loss2 = N*running_loss2.item() / images.shape[0]  
+                self.test_loss_epochs.append(i_epoch)
+                self.test_loss_list2.append(epoch_loss2)
+                del images
+                del targets
+
             if not self.save_model_every is None and (i_epoch+1)%self.save_model_every==0:
                 model_save = copy.deepcopy(model)
                 model_save.to(cpu)
                 model_save.eval()
                 fls.dill_save(fls.temp_dir + 'intermediate_model_' + str(i_epoch+1) + '.pickle', model_save)
 
+            if (i_epoch+1)%self.plot_every==0 or i_epoch+1 == self.n_epochs:
+                plt.figure()
+                plt.plot(self.train_loss_list1)
+                plt.plot(self.train_loss_list2)
+                plt.plot(self.test_loss_epochs, self.test_loss_list2)
+                plt.pause(0.1)
+
         model.to(cpu)
         model.eval()
         self.model = model
 
-        plt.figure()
-        plt.plot(self.train_loss_list1)
-        plt.plot(self.train_loss_list2)
-        plt.pause(0.1)
+        
 
     @fls.profile_each_line
     def infer(self, data):
