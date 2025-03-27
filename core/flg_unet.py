@@ -31,6 +31,7 @@ import flg_unet_resnet34_3layer
 import itertools
 import monai
 import gc
+import h5py
 
 @dataclass(slots=True)
 class DatasetTrain(torch.utils.data.IterableDataset):
@@ -53,7 +54,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 
     #@fls.profile_each_line
     def __iter__(self): 
-        #@fls.profile_each_line
+        @fls.profile_each_line
         def get_next():
             #t=time.time()
             # Determine which location in which tomogram we will use
@@ -70,8 +71,8 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 for i in range(3):
                     coords[i] = coords[i] + rng.integers(-self.offset_range_for_pos[i], self.offset_range_for_pos[i])
                     if coords[i]<self.size[i]//2: coords[i] = self.size[i]//2                    
-                    if coords[i]>dataset.data.shape[i]-self.size[i]//2-1: coords[i] = dataset.data.shape[i]-self.size[i]//2-1
-                #print(dataset.name,dataset.data.shape,coords)
+                    if coords[i]>dataset.data_shape[i]-self.size[i]//2-1: coords[i] = dataset.data_shape[i]-self.size[i]//2-1
+                #print(dataset.name,dataset.data_shape,coords)
             else:
                 # Pick at random
                 #print('rand')
@@ -79,8 +80,8 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 dataset = self.data_list[index]
                 coords = []
                 for i in range(3):
-                    coords.append(rng.integers(self.size[i]//2, dataset.data.shape[i]-self.size[i]//2-1))
-                #print(dataset.name,dataset.data.shape,coords)
+                    coords.append(rng.integers(self.size[i]//2, dataset.data_shape[i]-self.size[i]//2-1))
+                #print(dataset.name,dataset.data_shape,coords)
 
             #print(dataset.name)
             #print('1', t-time.time())
@@ -88,7 +89,8 @@ class DatasetTrain(torch.utils.data.IterableDataset):
             slices = []
             for i in range(3):
                 slices.append(slice(coords[i]-self.size[i]//2, coords[i]+self.size[i]//2))
-            image = dataset.data[tuple(slices)][...].astype(np.float32)
+            with h5py.File(dataset.data) as f:
+                image = f['data'][tuple(slices)][...].astype(np.float32)
             if self.normalize:
                 mean_list = dataset.mean_per_slice[slices[0]]
                 std_list = dataset.std_per_slice[slices[0]]
@@ -122,7 +124,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
         rng = np.random.default_rng(seed=self.seed)
         for d in self.data_list:
             d.load_to_h5py()
-        volumes = np.array([np.prod(d.data.shape) for d in self.data_list]).astype(np.float64)
+        volumes = np.array([np.prod(d.data_shape) for d in self.data_list]).astype(np.float64)
         names = [d.name for d in self.data_list]     
         tl = []
         for (i,d) in enumerate(self.data_list):
@@ -254,6 +256,10 @@ class UNetModel(fls.BaseClass):
         model.to(cpu)
         model.eval()
         self.model = model
+
+        plt.figure()
+        plt.plot(self.train_loss_list1)
+        plt.plot(self.train_loss_list2)
 
     @fls.profile_each_line
     def infer(self, data):

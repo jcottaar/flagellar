@@ -219,21 +219,23 @@ class Data(BaseClass):
     labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     labels_unfiltered: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     loaded_state: str = field(init=False, default='unloaded') # unloaded, h5py, memory
-    data: object = field(init=False, default=None) # None, 3D np array, or h5py dataset
+    data: object = field(init=False, default=None) # None, 3D np array, or filename to h5py
+    data_shape: tuple = field(init=False, default = (0,0,0))
     voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom
     mean_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
     std_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
 
     def _check_constraints(self):
         if not self.loaded_state == 'unloaded':
-            assert(len(self.data.shape)==3)
+            assert(len(self.data_shape)==3)
             if self.loaded_state == 'h5py':
-                assert type(self.data)==h5py._hl.dataset.Dataset
+                assert type(self.data)==str
             else:
                 assert self.loaded_state == 'memory'
                 assert type(self.data)==np.ndarray
-            assert(self.mean_per_slice.shape==(self.data.shape[0],))
-            assert(self.std_per_slice.shape==(self.data.shape[0],))
+                assert self.data.shape == self.data_shape
+            assert(self.mean_per_slice.shape==(self.data_shape[0],))
+            assert(self.std_per_slice.shape==(self.data_shape[0],))
 
     def load_to_h5py(self):
         assert self.is_train
@@ -261,10 +263,11 @@ class Data(BaseClass):
                 dset[...] = self.std_per_slice
 
         # Import h5py
-        f = h5py.File(filename, 'r')
-        self.data = f['data']
-        self.mean_per_slice = f['mean_per_slice'][...]
-        self.std_per_slice = f['std_per_slice'][...]
+        with h5py.File(filename, 'r') as f:        
+            self.data = filename
+            self.mean_per_slice = f['mean_per_slice'][...]
+            self.std_per_slice = f['std_per_slice'][...]
+            self.data_shape = f['data'].shape
 
         self.loaded_state = 'h5py'
         self.check_constraints()
@@ -279,6 +282,7 @@ class Data(BaseClass):
                 self.data = f['data'][...]
                 self.mean_per_slice = f['mean_per_slice'][...]
                 self.std_per_slice = f['std_per_slice'][...]
+                self.data_shape = self.data.shape
         else:
             # Read directly
             global loading_executor
@@ -293,6 +297,7 @@ class Data(BaseClass):
                 return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
             imgs = list(loading_executor.map(load_image, files))            
             self.data = np.stack(imgs)
+            self.data_shape = self.data.shape
 
             if env=='vast':
                 self.mean_per_slice = np.mean(self.data,axis=(1,2))
