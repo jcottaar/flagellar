@@ -87,6 +87,31 @@ class SelectSingleMotors(fls.BaseClass):
             d.labels = d.labels[row:row+1]        
 
     def calibrate(self, data, reference_data):
+        cs_tp = []
+        cs_fp = []
+        log_tp = []
+        log_fp = []
+        tp = 0
+        for t in data:
+            has_tp = False
+            for d in range(len(t.labels_unfiltered)):
+                #print( t.labels_unfiltered['tf_pn']
+                if t.labels_unfiltered['tf_pn'][d]==0:
+                    cs_tp.append(t.labels_unfiltered['size'][d])
+                    log_tp.append(t.labels_unfiltered['max_logit'][d])
+                    has_tp = True
+                if t.labels_unfiltered['tf_pn'][d]==1:
+                    cs_fp.append(t.labels_unfiltered['size'][d])
+                    log_fp.append(t.labels_unfiltered['max_logit'][d])
+            if has_tp:
+                tp += 1
+        plt.figure(figsize=(18,18))
+        print('Number of true positives before filter: ', tp)
+        plt.scatter(cs_fp, log_fp, color='red')
+        plt.scatter(cs_tp, log_tp, color='blue')        
+        plt.grid(True)
+        plt.pause(0.01)
+        
         thresholds_try = np.linspace(-10,100,100)
         scores = []
         for t in thresholds_try:
@@ -102,6 +127,7 @@ class SelectSingleMotors(fls.BaseClass):
         plt.ylabel('Score')
         plt.grid(True)
         self.max_logit_threshold = thresholds_try[np.argmax(scores)]
+        plt.pause(0.01)
         
 
         
@@ -141,8 +167,9 @@ class ThreeStepModel(fls.Model):
         if not self.data_after_step2 == 0:
             prev_names = [d.name for d in self.data_after_step2]
         if self.data_after_step2 == 0 or not data.name in prev_names:
-                heatmap = self.step1Heatmap.infer(data)
-                data.labels_unfiltered = self.step2Labels.make_labels(heatmap)
+            data.load_to_memory()
+            heatmap = self.step1Heatmap.infer(data)
+            data.labels_unfiltered = self.step2Labels.make_labels(heatmap)
         else:
             for d in self.data_after_step2:
                 if d.name == data.name:

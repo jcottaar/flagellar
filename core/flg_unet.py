@@ -51,10 +51,10 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     reproduce_voxel_bug: bool = field(init=True, default=False)
 
     # Augments
-    rotate_xy_90 = 0.
-    rotate_xy_180 = 0.
-    rotate_xz_180 = 0.
-    flip_x = 0.
+    rotate_xy_90 = 0.5
+    rotate_xy_180 = 0.5
+    rotate_xz_180 = 0.5
+    flip_x = 0.5
     
 
     data_list: list = field(init=True, default_factory=list)
@@ -188,7 +188,7 @@ class UNetModel(fls.BaseClass):
     verbose = False
     deterministic_train = False
     save_model_every = 100
-    plot_every = 100
+    plot_every = 500
     n_images_test = 100
     test_loss_every = 10
 
@@ -300,6 +300,7 @@ class UNetModel(fls.BaseClass):
                 plt.plot(self.train_loss_list2)
                 plt.plot(self.test_loss_epochs, self.test_loss_list2)
                 plt.pause(0.1)
+                plt.grid(True)
 
         model.to(cpu)
         model.eval()

@@ -369,7 +369,6 @@ def infer_internal_single_parallel(data):
         global model_parallel
         if model_parallel is None:
             model_parallel= dill_load(temp_dir+'parallel.pickle')
-        data.load_to_memory()
         return_data = model_parallel._infer_single(data)
         return_data.unload()
         return return_data
@@ -428,8 +427,6 @@ class Model(BaseClass):
                 t = time.time()
                 x = copy.deepcopy(xx)                
                 was_loaded = (x.loaded_state=='memory')                
-                if not was_loaded: x.load_to_memory()
-                profile_print(x.name + ' loading: ' + str(time.time()-t))
                 x = self._infer_single(x)
                 if not was_loaded: x.unload()
                 result.append(x)
