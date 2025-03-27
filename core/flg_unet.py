@@ -48,6 +48,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 
     # Target settings
     radius: float = field(init=True, default=200.) # in angstrom, not pixels!
+    reproduce_voxel_bug: bool = field(init=True, default=False)
 
     data_list: list = field(init=True, default_factory=list)
     
@@ -102,7 +103,11 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 
             # Construct target
             target = np.zeros_like(image, dtype=bool)
-            radius_pix = self.radius/dataset.voxel_spacing
+            if self.reproduce_voxel_bug:
+                voxel_spacing = 6.5
+            else:
+                voxel_spacing = dataset.voxel_spacing
+            radius_pix = self.radius/voxel_spacing
             mask_size = np.ceil(radius_pix).astype(int)+2            
             inds = np.arange(-mask_size, mask_size+1)
             xx,yy,zz = np.meshgrid(inds, inds, inds, indexing="ij")             
@@ -260,6 +265,7 @@ class UNetModel(fls.BaseClass):
         plt.figure()
         plt.plot(self.train_loss_list1)
         plt.plot(self.train_loss_list2)
+        plt.pause(0.1)
 
     @fls.profile_each_line
     def infer(self, data):
