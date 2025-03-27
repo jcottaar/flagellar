@@ -63,9 +63,9 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                     row = rng.integers(0,len(all_train_labels))
                     if not all_train_labels['z'][row]==-1:
                         break
-                loc = np.argwhere([x==all_train_labels['tomo_id'][row] for x in names])
-                assert(loc.shape == (1,1))
-                dataset = self.data_list[loc[0,0]]
+                loc = all_train_labels['ind'][row]
+                #assert(loc.shape == (1,1))
+                dataset = self.data_list[loc]
                 coords = [int(all_train_labels['z'][row]), int(all_train_labels['y'][row]), int(all_train_labels['x'][row])]                
                 for i in range(3):
                     coords[i] = coords[i] + rng.integers(-self.offset_range_for_pos[i], self.offset_range_for_pos[i])
@@ -99,22 +99,22 @@ class DatasetTrain(torch.utils.data.IterableDataset):
             #print('2', t-time.time())
 
             # Construct target
-            target = np.zeros_like(image, dtype=np.float32)
+            target = np.zeros_like(image, dtype=bool)
             radius_pix = self.radius/dataset.voxel_spacing
             mask_size = np.ceil(radius_pix).astype(int)+2            
             inds = np.arange(-mask_size, mask_size+1)
             xx,yy,zz = np.meshgrid(inds, inds, inds, indexing="ij")             
-            mask = np.zeros_like(zz, dtype=np.float32)
-            mask[np.sqrt(zz**2+yy**2+xx**2) < radius_pix] = 1.
+            mask = np.zeros_like(zz, dtype=bool)
+            mask[np.sqrt(zz**2+yy**2+xx**2) < radius_pix] = True
             for row in range(len(dataset.labels)):
                 offset = np.array([int(dataset.labels['z'][row]), int(dataset.labels['y'][row]), int(dataset.labels['x'][row])]) - coords + np.array(self.size)//2
-                flg_numerics.add_matrix_with_offset(target,mask,offset)               
-            target[target>1]=1
+                flg_numerics.or_matrix_with_offset(target,mask,offset)               
+            #target[target>1]=1
 
             #print('3', t-time.time())
 
             image = torch.tensor(image, dtype=torch.float16)
-            target = torch.tensor(target, dtype=torch.float16)
+            target = torch.tensor(target, dtype=torch.bool)
 
             #print('4', t-time.time())
             return image, target
@@ -125,10 +125,11 @@ class DatasetTrain(torch.utils.data.IterableDataset):
         volumes = np.array([np.prod(d.data.shape) for d in self.data_list]).astype(np.float64)
         names = [d.name for d in self.data_list]     
         tl = []
-        for d in self.data_list:
+        for (i,d) in enumerate(self.data_list):
             tl.append(copy.deepcopy(d.labels))
             tl[-1]['tomo_id'] = d.name
-        all_train_labels = pd.concat(tl, axis=0).reset_index()
+            tl[-1]['ind'] = i
+        all_train_labels = pd.concat(tl, axis=0).reset_index()        
         
         for i_set in itertools.count():     
             yield get_next()
@@ -164,7 +165,6 @@ class UNetModel(fls.BaseClass):
     # Diagnostics
     train_loss_list1: list = field(init=True, default_factory=list)
     train_loss_list2: list = field(init=True, default_factory=list)
-    
     
     def train(self,train_data):
         #TODO: scheduler, augments, ensemble

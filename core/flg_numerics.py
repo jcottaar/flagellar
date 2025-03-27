@@ -81,7 +81,7 @@ def collect_patches(data, sizes, normalize_slices = True):
     return collected, is_edge
 
 
-def add_matrix_with_offset(A,B,offset):
+def or_matrix_with_offset(A,B,offset):
     # Adds B to A, with the center of B at index offset
     # 3D matrices
     # Elements of B that end up outside A are ignored
@@ -109,4 +109,4 @@ def add_matrix_with_offset(A,B,offset):
     bx_end = bx_start + (x_end - x_start)
 
     # Add B to A at the specified offset
-    A[z_start:z_end, y_start:y_end, x_start:x_end] += B[bz_start:bz_end, by_start:by_end, bx_start:bx_end]
+    A[z_start:z_end, y_start:y_end, x_start:x_end] = np.logical_or(A[z_start:z_end, y_start:y_end, x_start:x_end],B[bz_start:bz_end, by_start:by_end, bx_start:bx_end])
