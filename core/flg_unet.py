@@ -202,7 +202,7 @@ class UNetModel(fls.BaseClass):
     test_loss_list2: list = field(init=True, default_factory=list)
     
     def train(self,train_data,validation_data):
-        #TODO: scheduler, augments, ensemble, entropy weighting
+        #TODO: scheduler, ensemble, entropy weighting
         cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
 
         criterion1 = nn.BCEWithLogitsLoss()

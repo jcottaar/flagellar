@@ -224,6 +224,7 @@ class Data(BaseClass):
     voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom
     mean_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
     std_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
+    percentiles_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray((101,0)))
 
     def _check_constraints(self):
         if not self.loaded_state == 'unloaded':
@@ -236,6 +237,7 @@ class Data(BaseClass):
                 assert self.data.shape == self.data_shape
             assert(self.mean_per_slice.shape==(self.data_shape[0],))
             assert(self.std_per_slice.shape==(self.data_shape[0],))
+            assert(self.percentiles_per_slice.shape==(8,self.data_shape[0]))
 
     def load_to_h5py(self):
         assert self.is_train
@@ -261,18 +263,21 @@ class Data(BaseClass):
                 dset[...] = self.mean_per_slice
                 dset=f.create_dataset('std_per_slice', shape = self.std_per_slice.shape, dtype='float64')
                 dset[...] = self.std_per_slice
+                dset=f.create_dataset('percentiles_per_slice', shape = self.percentiles_per_slice.shape, dtype='float64')                
+                dset[...] = self.percentiles_per_slice
 
         # Import h5py
         with h5py.File(filename, 'r') as f:        
             self.data = filename
             self.mean_per_slice = f['mean_per_slice'][...]
             self.std_per_slice = f['std_per_slice'][...]
+            self.percentiles_per_slice = f['percentiles_per_slice'][...]
             self.data_shape = f['data'].shape
 
         self.loaded_state = 'h5py'
         self.check_constraints()
 
-    @profile_each_line
+    #@profile_each_line
     def load_to_memory(self):  
         if self.loaded_state == 'memory': return
         
@@ -282,6 +287,7 @@ class Data(BaseClass):
                 self.data = f['data'][...]
                 self.mean_per_slice = f['mean_per_slice'][...]
                 self.std_per_slice = f['std_per_slice'][...]
+                self.percentiles_per_slice = f['percentiles_per_slice'][...]
                 self.data_shape = self.data.shape
         else:
             # Read directly
@@ -302,12 +308,14 @@ class Data(BaseClass):
             if env=='vast':
                 self.mean_per_slice = np.mean(self.data,axis=(1,2))
                 self.std_per_slice = np.std(self.data,axis=(1,2))
+                self.percentiles_per_slice = np.percentile(self.data, [0,1,2,5,95,98,99,100], axis=(1,2))
             else:
                 claim_gpu('cupy')
                 import cupy as cp            
                 data_cp = cp.array(self.data)
                 self.mean_per_slice = cp.asnumpy(cp.mean(data_cp,axis=(1,2)))
                 self.std_per_slice = cp.asnumpy(cp.std(data_cp,axis=(1,2)))
+                self.percentiles_per_slice = cp.asnumpy(cp.percentile(data_cp, [0,1,2,5,95,98,99,100], axis=(1,2)))
 
         assert type(self.data)==np.ndarray
         self.loaded_state = 'memory'
