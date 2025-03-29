@@ -55,6 +55,9 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     rotate_xy_180 = 0.5
     rotate_xz_180 = 0.5
     flip_x = 0.5
+
+    # Other
+    return_float32 = False
     
 
     data_list: list = field(init=True, default_factory=list)
@@ -142,7 +145,10 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 
             #print('3', t-time.time())
 
-            image = torch.tensor(image.copy(), dtype=torch.float16)
+            if self.return_float32:
+                image = torch.tensor(image.copy(), dtype=torch.float32)
+            else:
+                image = torch.tensor(image.copy(), dtype=torch.float16)
             target = torch.tensor(target.copy(), dtype=torch.bool)
 
             #print('4', t-time.time())
@@ -221,26 +227,32 @@ class UNetModel(fls.BaseClass):
         optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)   
 
         dataset_test = copy.deepcopy(self.dataset)
+        dataset_test.return_float32 = self.deterministic_train
         dataset_test.data_list = copy.deepcopy(validation_data)
         data_loader_test = iter(torch.utils.data.DataLoader(dataset_test,batch_size=self.n_images_test,num_workers=1,pin_memory=True,persistent_workers=True))
 
         self.dataset.data_list = copy.deepcopy(train_data)
+        self.dataset.return_float32 = self.deterministic_train
         if not self.seed is None:
             self.dataset.seed = self.seed+1
         data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=1,pin_memory=True,persistent_workers=True))
 
         scaler = torch.amp.GradScaler('cuda')
 
+        print('alter')
+        device_type = torch.float32 if self.deterministic_train else torch.float16
+        mixed_precision_context = contextlib.null_context if self.deterministic_train else torch.amp.autocast('cuda')
+
         for i_epoch in range(self.n_epochs):
             print(i_epoch, end=' ')
             running_loss1 = 0.0
             running_loss2 = 0.0
             images, targets = next(data_loader)
-            with torch.amp.autocast('cuda'):
+            with mixed_precision_context:
                 N=self.dataset.n_positive + self.dataset.n_random
                 for i_image in range(images.shape[0]//N):
-                    image_device = images[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
-                    target_device = targets[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                    image_device = images[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=device_type, non_blocking=True)
+                    target_device = targets[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=device_type, non_blocking=True)
                     output = model(image_device)  
                     loss1 = criterion1(output, target_device)
                     loss2 = criterion2(output, target_device)  
@@ -269,7 +281,7 @@ class UNetModel(fls.BaseClass):
                 running_loss1 = 0.0
                 running_loss2 = 0.0
                 images, targets = next(data_loader_test)                
-                with torch.no_grad(), torch.amp.autocast('cuda'):
+                with torch.no_grad(), mixed_precision_context:
                     N=self.dataset.n_positive + self.dataset.n_random
                     for i_image in range(images.shape[0]//N):
                         image_device = images[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
@@ -312,7 +324,7 @@ class UNetModel(fls.BaseClass):
     def infer(self, data):
         #TODO: TTA
 
-        cpu,device = fls.prep_pytorch(self.seed, False, False)
+        cpu,device = fls.prep_pytorch(self.seed, True, False)
 
         # Prepare data and output
         image = torch.tensor(data.data, dtype=torch.float16).to(device)

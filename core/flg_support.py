@@ -55,6 +55,7 @@ match env:
         temp_dir = 'd:/flagellar/temp/'     
         h5py_cache_dir = 'd:/flagellar/cache/'
         model_dir = 'd:/flagellar/models/'
+        code_dir = 'd:/flagellar/code/core/'
         output_dir = temp_dir
         loader_threads = 32
     case 'kaggle':
@@ -63,12 +64,14 @@ match env:
         h5py_cache_dir = '/kaggle/temp/cache/'
         model_dir = '/kaggle/input/my-flg-models/'
         output_dir = '/kaggle/working/'
+        code_dir = '/flagellar/input/my-flg-library/'
         loader_threads = 8
     case 'vast':
         data_dir = '/flagellar/data/'
         temp_dir = '/flagellar/temp/'
         h5py_cache_dir = '/flagellar/cache/'
         model_dir = '/flagellar/models/'
+        code_dir = '/flagellar/code/core/'
         output_dir = temp_dir
         loader_threads = 32
 os.makedirs(temp_dir, exist_ok=True)
