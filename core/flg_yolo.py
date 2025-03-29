@@ -34,8 +34,12 @@ from dataclasses import dataclass, field, fields
 class YOLOModel(fls.Model):
     #Input
     n_epochs = 30
+    use_augs = True
+    use_pretrained_weights = True
     
     trained_model = 0
+
+    
    
     def _train(self,train_data,validation_data):
 
@@ -311,33 +315,66 @@ class YOLOModel(fls.Model):
                 model (YOLO): Trained YOLO model.
                 results: Training results.
             """
-            print(f"Loading pre-trained weights from: {pretrained_weights_path}")
-            model = YOLO(pretrained_weights_path)
-        
-            results = model.train(
-                data=yaml_path,
-                epochs=epochs,
-                batch=batch_size,
-                imgsz=img_size,
-                project=yolo_weights_dir,
-                name='motor_detector',
-                exist_ok=True,
-                patience=10,  # Stop training if no improvement after 10 epochs
-                save_period=5,  # Save model every 5 epochs
-                val=True,
-                verbose=True,
-                optimizer="AdamW",  # AdamW optimizer for stability
-                lr0=0.001,  # Initial learning rate
-                lrf=0.01,  # Final learning rate factor
-                cos_lr=True,  # Use cosine learning rate decay
-                weight_decay=0.0005,  # Prevent overfitting
-                momentum=0.937,  # Momentum for better gradient updates
-                close_mosaic=10,  # Disable mosaic augmentation after 10 epochs
-                mixup=0.2,  # Apply mixup augmentation
-                workers=4,  # Speed up data loading
-                augment=True,  # Enable additional augmentations
-                amp=True,  # Mixed precision training for faster performance
-            )
+            if self.use_pretrained_weights:
+                print(f"Loading pre-trained weights from: {pretrained_weights_path}")
+                model = YOLO(pretrained_weights_path)
+            else:
+                ultralytics.YOLO('yolov8m.yaml')
+
+            from ultralytics import settings
+
+            # Update a setting
+            settings.update({"mlflow": False})
+
+            if self.use_augs:
+                results = model.train(
+                    data=yaml_path,
+                    epochs=epochs,
+                    batch=batch_size,
+                    imgsz=img_size,
+                    project=yolo_weights_dir,
+                    name='motor_detector',
+                    exist_ok=True,
+                    patience=10,  # Stop training if no improvement after 10 epochs
+                    save_period=5,  # Save model every 5 epochs
+                    val=True,
+                    verbose=True,
+                    optimizer="AdamW",  # AdamW optimizer for stability
+                    lr0=0.001,  # Initial learning rate
+                    lrf=0.01,  # Final learning rate factor
+                    cos_lr=True,  # Use cosine learning rate decay
+                    weight_decay=0.0005,  # Prevent overfitting
+                    momentum=0.937,  # Momentum for better gradient updates
+                    close_mosaic=10,  # Disable mosaic augmentation after 10 epochs
+                    mixup=0.2,  # Apply mixup augmentation
+                    workers=4,  # Speed up data loading
+                    augment=True,  # Enable additional augmentations
+                    amp=True,  # Mixed precision training for faster performance
+                )
+            else:
+                results = model.train(
+                    data=yaml_path,
+                    epochs=epochs,
+                    batch=batch_size,
+                    imgsz=img_size,
+                    project=yolo_weights_dir,
+                    name='motor_detector',
+                    exist_ok=True,
+                    patience=10,  # Stop training if no improvement after 10 epochs
+                    save_period=5,  # Save model every 5 epochs
+                    val=True,
+                    verbose=True,
+                    optimizer="AdamW",  # AdamW optimizer for stability
+                    lr0=0.001,  # Initial learning rate
+                    lrf=0.01,  # Final learning rate factor
+                    cos_lr=True,  # Use cosine learning rate decay
+                    weight_decay=0.0005,  # Prevent overfitting
+                    momentum=0.937,  # Momentum for better gradient updates
+                    workers=4,  # Speed up data loading
+                    augment=False,  # Enable additional augmentations
+                    amp=True,  # Mixed precision training for faster performance
+                    hsv_h=0.0, hsv_s=0.0, hsv_v=0.0, degrees=0.0, translate=0.0, scale=0.0, shear=0.0, perspective=0.0, flipud=0.0, fliplr=0.0, bgr=0.0, mosaic=0.0, mixup=0.0, copy_paste=0.0, auto_augment=None, erasing=0.0, crop_fraction=1.0,
+                )
         
             run_dir = os.path.join(yolo_weights_dir, 'motor_detector')
             
