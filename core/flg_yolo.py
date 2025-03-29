@@ -319,7 +319,7 @@ class YOLOModel(fls.Model):
                 print(f"Loading pre-trained weights from: {pretrained_weights_path}")
                 model = YOLO(pretrained_weights_path)
             else:
-                ultralytics.YOLO('yolov8m.yaml')
+                model = YOLO('yolov8m.yaml')
 
             from ultralytics import settings
 
