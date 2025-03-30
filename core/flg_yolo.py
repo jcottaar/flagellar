@@ -112,6 +112,9 @@ class YOLOModel(fls.Model):
 
             # Set train and test
             train_tomos = [d.name for d in train_data_filtered]
+            print(train_tomos[0:5])
+            np.random.shuffle(train_tomos)
+            print(train_tomos[0:5])
             val_tomos = [d.name for d in validation_data_filtered]
 
             
@@ -199,6 +202,15 @@ class YOLOModel(fls.Model):
                 "train_slices": train_slices,
                 "val_slices": val_slices
             }
+
+        # Set random seeds for reproducibility
+        print(self.seed)
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        torch.manual_seed(self.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(self.seed)
+            torch.backends.cudnn.deterministic = True
         
         # Run the preprocessing
         summary = prepare_yolo_dataset(TRUST)
@@ -208,11 +220,6 @@ class YOLOModel(fls.Model):
         print(f"- Dataset directory: {summary['dataset_dir']}")
         print(f"- YAML configuration: {summary['yaml_path']}")
         print("\nReady for YOLO training!")
-
-        # Set random seeds for reproducibility
-        np.random.seed(self.seed)
-        random.seed(self.seed)
-        torch.manual_seed(self.seed)
         
         # # Define paths for the Kaggle environment
         yolo_weights_dir = fls.temp_dir + '/yolo_weights/'
@@ -350,6 +357,7 @@ class YOLOModel(fls.Model):
                     workers=4,  # Speed up data loading
                     augment=True,  # Enable additional augmentations
                     amp=True,  # Mixed precision training for faster performance
+                    seed=self.seed,
                 )
             else:
                 results = model.train(
@@ -373,6 +381,7 @@ class YOLOModel(fls.Model):
                     workers=4,  # Speed up data loading
                     augment=False,  # Enable additional augmentations
                     amp=True,  # Mixed precision training for faster performance
+                    seed=self.seed,
                     hsv_h=0.0, hsv_s=0.0, hsv_v=0.0, degrees=0.0, translate=0.0, scale=0.0, shear=0.0, perspective=0.0, flipud=0.0, fliplr=0.0, bgr=0.0, mosaic=0.0, mixup=0.0, copy_paste=0.0, auto_augment=None, erasing=0.0, crop_fraction=1.0,
                 )
         
