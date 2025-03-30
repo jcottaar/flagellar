@@ -62,6 +62,11 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     
 
     data_list: list = field(init=True, default_factory=list)
+
+    def _preprocess(self, image, mean_list, std_list, percentile_list):
+        if self.normalize:
+            for ii in range(image.shape[0]):
+                image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
     
 
     #@fls.profile_each_line
@@ -107,7 +112,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 mean_list = dataset.mean_per_slice[slices[0]]
                 std_list = dataset.std_per_slice[slices[0]]
                 for ii in range(image.shape[0]):
-                    image[ii,:,:,] = (image[ii,:,:,]-mean_list[i])/std_list[i]
+                    image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
             assert image.shape == self.size
 
             #print('2', t-time.time())
