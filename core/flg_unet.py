@@ -332,16 +332,16 @@ class UNetModel(fls.BaseClass):
         #TODO: TTA
 
         cpu,device = fls.prep_pytorch(self.seed, True, False)
-
+        
         # Prepare data and output
-        image = torch.tensor(data.data, dtype=torch.float16).to(device)
+        image = torch.tensor(data.data, dtype=torch.float16).to(device)       
+        self.dataset._preprocess(image, data.mean_per_slice, data.std_per_slice, data.percentiles_per_slice)   
         image = image[None,None,:,:,:]
         pad_list = []
         for dim in [2,1,0]:
             pad_list.append(0)
             pad_list.append(max(0,self.infer_size[dim]-image.shape[dim+2]))
-        image = F.pad(image, pad_list, mode="constant", value=0)
-        self.dataset._preprocess(image, data.mean_per_slice, data.std_per_slice, data.percentiles_per_slice)
+        image = F.pad(image, pad_list, mode="constant", value=0)        
         # if self.dataset.normalize:
         #     for ii in range(image.shape[0]):
         #         image[ii,:,:] = (image[ii,:,:]-data.mean_per_slice[ii])/data.std_per_slice[ii]        

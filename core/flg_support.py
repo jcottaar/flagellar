@@ -257,8 +257,7 @@ class Data(BaseClass):
             if not os.path.isfile(filename):
                 filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-2/' + base_name + '.h5';
                 if not os.path.isfile(filename):
-                    filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-3/' + base_name + '.h5';
-                    assert os.path.isfile(filename)  
+                    filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-3/' + base_name + '.h5';                     
         return filename
         
     def load_to_h5py(self):
