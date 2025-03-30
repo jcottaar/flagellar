@@ -108,11 +108,12 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 slices.append(slice(coords[i]-self.size[i]//2, coords[i]+self.size[i]//2))
             with h5py.File(dataset.data) as f:
                 image = f['data'][tuple(slices)][...].astype(np.float32)
-            if self.normalize:
-                mean_list = dataset.mean_per_slice[slices[0]]
-                std_list = dataset.std_per_slice[slices[0]]
-                for ii in range(image.shape[0]):
-                    image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
+            self._preprocess(image, dataset.mean_per_slice[slices[0]], dataset.std_per_slice[slices[0]], dataset.percentiles_per_slice[:,slices[0]])
+            # if self.normalize:
+            #     mean_list = dataset.mean_per_slice[slices[0]]
+            #     std_list = dataset.std_per_slice[slices[0]]
+            #     for ii in range(image.shape[0]):
+            #         image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
             assert image.shape == self.size
 
             #print('2', t-time.time())
@@ -341,9 +342,10 @@ class UNetModel(fls.BaseClass):
             pad_list.append(0)
             pad_list.append(max(0,self.infer_size[dim]-image.shape[dim+2]))
         image = F.pad(image, pad_list, mode="constant", value=0)
-        if self.dataset.normalize:
-            for ii in range(image.shape[0]):
-                image[ii,:,:] = (image[ii,:,:]-data.mean_per_slice[ii])/data.std_per_slice[ii]        
+        self.dataset._preprocess(image, data.mean_per_slice, data.std_per_slice, data.percentiles_per_slice)
+        # if self.dataset.normalize:
+        #     for ii in range(image.shape[0]):
+        #         image[ii,:,:] = (image[ii,:,:]-data.mean_per_slice[ii])/data.std_per_slice[ii]        
         combined_probablity_map = torch.zeros((image.shape[2], image.shape[3], image.shape[4]),dtype=torch.float16).to(device)
         self.model.to(device)
         self.model.eval()
