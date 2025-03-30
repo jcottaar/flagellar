@@ -247,7 +247,6 @@ class UNetModel(fls.BaseClass):
 
         scaler = torch.amp.GradScaler('cuda')
 
-        print('alter')
         device_type = torch.float32 if self.deterministic_train else torch.float16
         mixed_precision_context = contextlib.nullcontext() if self.deterministic_train else torch.amp.autocast('cuda')
 
