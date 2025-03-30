@@ -78,7 +78,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 loc = all_train_labels['ind'][row]
                 #assert(loc.shape == (1,1))
                 dataset = self.data_list[loc]
-                coords = [int(all_train_labels['z'][row]), int(all_train_labels['y'][row]), int(all_train_labels['x'][row])]                
+                coords = [int(all_train_labels['z'][row]*dataset.resize_factor), int(all_train_labels['y'][row]*dataset.resize_factor), int(all_train_labels['x'][row]*dataset.resize_factor)]                
                 for i in range(3):
                     coords[i] = coords[i] + rng.integers(-self.offset_range_for_pos[i], self.offset_range_for_pos[i])
                     if coords[i]<self.size[i]//2: coords[i] = self.size[i]//2                    
@@ -117,14 +117,14 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 voxel_spacing = 6.5
             else:
                 voxel_spacing = dataset.voxel_spacing
-            radius_pix = self.radius/voxel_spacing
+            radius_pix = self.radius/voxel_spacing*dataset.resize_factor
             mask_size = np.ceil(radius_pix).astype(int)+2            
             inds = np.arange(-mask_size, mask_size+1)
             xx,yy,zz = np.meshgrid(inds, inds, inds, indexing="ij")             
             mask = np.zeros_like(zz, dtype=bool)
             mask[np.sqrt(zz**2+yy**2+xx**2) < radius_pix] = True
             for row in range(len(dataset.labels)):
-                offset = np.array([int(dataset.labels['z'][row]), int(dataset.labels['y'][row]), int(dataset.labels['x'][row])]) - coords + np.array(self.size)//2
+                offset = np.array([int(dataset.labels['z'][row]*dataset.resize_factor), int(dataset.labels['y'][row]*dataset.resize_factor), int(dataset.labels['x'][row]*dataset.resize_factor)]) - coords + np.array(self.size)//2
                 flg_numerics.or_matrix_with_offset(target,mask,offset)               
             #target[target>1]=1
 
@@ -310,9 +310,9 @@ class UNetModel(fls.BaseClass):
                 plt.figure()
                 plt.plot(self.train_loss_list1)
                 plt.plot(self.train_loss_list2)
-                plt.plot(self.test_loss_epochs, self.test_loss_list2)
-                plt.pause(0.1)
+                plt.plot(self.test_loss_epochs, self.test_loss_list2)                
                 plt.grid(True)
+                plt.pause(0.1)
 
         model.to(cpu)
         model.eval()

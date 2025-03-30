@@ -30,6 +30,7 @@ import cv2
 import h5py
 import time
 import sklearn
+import skimage
 
 
 '''
@@ -228,6 +229,10 @@ class Data(BaseClass):
     mean_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
     std_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
     percentiles_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray((101,0)))
+    resize_factor: float = field(init=True, default=1.)
+
+    # Loading options
+    target_size: object=field(init=False, default=None) # or int
 
     def _check_constraints(self):
         if not self.loaded_state == 'unloaded':
@@ -242,19 +247,26 @@ class Data(BaseClass):
             assert(self.std_per_slice.shape==(self.data_shape[0],))
             assert(self.percentiles_per_slice.shape==(8,self.data_shape[0]))
 
+    def _h5_filename(self):
+        base_name = self.name
+        if not self.target_size is None:
+            base_name = base_name + '_size' + str(self.target_size)
+        filename = h5py_cache_dir + base_name + '.h5'
+        if env == 'kaggle':
+            filename = '/kaggle/input/byu-flagellar-motors-as-h5py/' + base_name + '.h5';
+            if not os.path.isfile(filename):
+                filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-2/' + base_name + '.h5';
+                if not os.path.isfile(filename):
+                    filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-3/' + base_name + '.h5';
+                    assert os.path.isfile(filename)  
+        return filename
+        
     def load_to_h5py(self):
         assert self.is_train
 
         if self.loaded_state == 'h5py': return
 
-        filename = h5py_cache_dir + self.name + '.h5'
-        if env == 'kaggle':
-            filename = '/kaggle/input/byu-flagellar-motors-as-h5py/' + self.name + '.h5';
-            if not os.path.isfile(filename):
-                filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-2/' + self.name + '.h5';
-                if not os.path.isfile(filename):
-                    filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-3/' + self.name + '.h5';
-                    assert os.path.isfile(filename)  
+        filename = self._h5_filename()        
         
         # Create h5py if needed
         if not os.path.isfile(filename):
@@ -268,6 +280,8 @@ class Data(BaseClass):
                 dset[...] = self.std_per_slice
                 dset=f.create_dataset('percentiles_per_slice', shape = self.percentiles_per_slice.shape, dtype='float64')                
                 dset[...] = self.percentiles_per_slice
+                dset=f.create_dataset('resize_factor', shape = (), dtype='float64')                
+                dset[...] = self.resize_factor
 
         # Import h5py
         with h5py.File(filename, 'r') as f:        
@@ -275,22 +289,24 @@ class Data(BaseClass):
             self.mean_per_slice = f['mean_per_slice'][...]
             self.std_per_slice = f['std_per_slice'][...]
             self.percentiles_per_slice = f['percentiles_per_slice'][...]
+            self.resize_factor = f['resize_factor'][...].item()
             self.data_shape = f['data'].shape
 
         self.loaded_state = 'h5py'
         self.check_constraints()
 
-    #@profile_each_line
+    @profile_each_line
     def load_to_memory(self):  
         if self.loaded_state == 'memory': return
-        
-        if self.is_train and os.path.isfile(h5py_cache_dir + self.name + '.h5'):
+ 
+        if self.is_train and os.path.isfile(self._h5_filename()):
             # Load from cache
-            with h5py.File(h5py_cache_dir + self.name + '.h5', 'r') as f:
+            with h5py.File(self._h5_filename(), 'r') as f:
                 self.data = f['data'][...]
                 self.mean_per_slice = f['mean_per_slice'][...]
                 self.std_per_slice = f['std_per_slice'][...]
                 self.percentiles_per_slice = f['percentiles_per_slice'][...]
+                self.resize_factor = f['resize_factor'][...].item()
                 self.data_shape = self.data.shape
         else:
             # Read directly
@@ -305,21 +321,57 @@ class Data(BaseClass):
             def load_image(f):
                 return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
             imgs = list(loading_executor.map(load_image, files))            
-            self.data = np.stack(imgs)
-            self.data_shape = self.data.shape
+            self.data = np.stack(imgs)            
 
+            # if not self.target_size is None:
+            #     self.resize_factor = min(self.target_size/self.data.shape[1], self.target_size/self.data.shape[2])
+            #     #import cupyx.scipy.ndimage
+            #    # data_cp = cupyx.scipy.ndimage.zoom(data_cp, self.resize_factor)
+            #     #print(data_cp.shape)
+            #     new_shape = np.round(np.array(self.data.shape)*self.resize_factor).astype(int)
+            #     print(new_shape)
+            #     #self.data = skimage.transform.resize(self.data, new_shape, order=1, anti_aliasing=True)
+            #     import scipy
+            #     data_new = np.zeros((self.data.shape[0], new_shape[1], new_shape[2]), dtype=self.data.dtype)
+            #     for ii in range(self.data.shape[0]):
+            #         print(ii)
+            #         data_new[ii,:,:] = scipy.ndimage.zoom(self.data[ii,:,:], self.resize_factor)
+            #     #self.data = scipy.ndimage.zoom(self.data, self.resize_factor)
+            #     print(self.data.shape)
             if env=='vast':
+                if not self.target_size is None:
+                    raise 'todo'
                 self.mean_per_slice = np.mean(self.data,axis=(1,2))
                 self.std_per_slice = np.std(self.data,axis=(1,2))
-                self.percentiles_per_slice = np.percentile(self.data, [0,1,2,5,95,98,99,100], axis=(1,2))
+                self.percentiles_per_slice = np.percentile(self.data, [0,1,2,5,95,98,99,100], axis=(1,2))                
             else:
                 claim_gpu('cupy')
                 import cupy as cp            
-                data_cp = cp.array(self.data)
+                data_cp = cp.array(self.data)   
+                if not self.target_size is None:
+                    import cupyx.scipy.ndimage
+                    print(data_cp.shape)
+                    self.resize_factor = min(self.target_size/self.data.shape[1], self.target_size/self.data.shape[2])
+                    #new_shape = np.round(np.array(self.data.shape)*self.resize_factor).astype(int)
+                    #print(new_shape)
+                    test_data = cupyx.scipy.ndimage.zoom(data_cp[0,:,:], self.resize_factor)
+                    data_new = cp.zeros((data_cp.shape[0], test_data.shape[0], test_data.shape[1]), dtype=data_cp.dtype)
+                    for ii in range(self.data.shape[0]):
+                        data_new[ii,:,:] = cupyx.scipy.ndimage.zoom(data_cp[ii,:,:], self.resize_factor)
+                    data_cp = data_new
+                    test_data = cupyx.scipy.ndimage.zoom(data_cp[:,0,0], self.resize_factor)
+                    data_new = cp.zeros((test_data.shape[0], data_cp.shape[1], data_cp.shape[2]), dtype=data_cp.dtype)
+                    for ii in range(data_cp.shape[1]):
+                        data_new[:,ii,:] = cupyx.scipy.ndimage.zoom(data_cp[:,ii,:], (self.resize_factor,1.))
+                    data_cp = data_new
+                    print(data_cp.shape)
                 self.mean_per_slice = cp.asnumpy(cp.mean(data_cp,axis=(1,2)))
                 self.std_per_slice = cp.asnumpy(cp.std(data_cp,axis=(1,2)))
-                self.percentiles_per_slice = cp.asnumpy(cp.percentile(data_cp, [0,1,2,5,95,98,99,100], axis=(1,2)))
+                self.percentiles_per_slice = cp.asnumpy(cp.percentile(data_cp, [0,1,2,5,95,98,99,100], axis=(1,2)))                
+                self.data = cp.asnumpy(data_cp)
+                
 
+        self.data_shape = self.data.shape
         assert type(self.data)==np.ndarray
         self.loaded_state = 'memory'
         self.check_constraints()
@@ -396,6 +448,8 @@ class Model(BaseClass):
     run_in_parallel: bool = field(init=False, default=False)    
     seed: object = field(init=True, default=None)
 
+    target_size: object = field(init=True, default=None)
+
     def _check_constraints(self):
         assert(self.state>=0 and self.state<=1)
 
@@ -406,9 +460,15 @@ class Model(BaseClass):
         validation_data = copy.deepcopy(validation_data)
         for d in train_data:
             d.unload()
+            d.target_size = self.target_size
         for d in validation_data:
             d.unload()
+            d.target_size = self.target_size
         self._train(train_data, validation_data)
+        for d in train_data:
+            d.unload()
+        for d in validation_data:
+            d.unload()
         self.state = 1
         self.check_constraints()        
 
@@ -420,6 +480,8 @@ class Model(BaseClass):
         test_data = copy.deepcopy(test_data)
         for t in test_data:
             t.labels  = pd.DataFrame()
+            t.unload()
+            t.target_size = self.target_size
         test_data = self._infer(test_data)
         for t in test_data:
             t.check_constraints()
@@ -436,10 +498,9 @@ class Model(BaseClass):
             result = []
             for xx in test_data:     
                 t = time.time()
-                x = copy.deepcopy(xx)                
-                was_loaded = (x.loaded_state=='memory')                
+                x = copy.deepcopy(xx)                             
                 x = self._infer_single(x)
-                if not was_loaded: x.unload()
+                x.unload()
                 result.append(x)
                 profile_print(x.name + ' total infer time: ' + str(time.time()-t))
         result = self._post_process(result)

@@ -39,7 +39,7 @@ class HeatMapToLocations(fls.BaseClass):
     state = 0 # 0 is uncalibrated, 1 is calibrated
 
     #@fls.profile_each_line
-    def make_labels(self, heatmap):
+    def make_labels(self, heatmap, data):
         rows_list = []
         
         mask = heatmap>self.threshold
@@ -57,9 +57,9 @@ class HeatMapToLocations(fls.BaseClass):
 
             centroid = stats['centroids'][cluster_ind]
             to_add = dict()
-            to_add['z'] = np.round(centroid[0]).astype(int)
-            to_add['y'] = np.round(centroid[1]).astype(int)
-            to_add['x'] = np.round(centroid[2]).astype(int)
+            to_add['z'] = np.round(centroid[0])/data.resize_factor
+            to_add['y'] = np.round(centroid[1])/data.resize_factor
+            to_add['x'] = np.round(centroid[2])/data.resize_factor
             to_add['size'] = stats['voxel_counts'][cluster_ind]
             to_add['max_logit'] = np.max(local_heatmap)
             if fls.is_submission:
@@ -169,7 +169,7 @@ class ThreeStepModel(fls.Model):
         if self.data_after_step2 == 0 or not data.name in prev_names:
             data.load_to_memory()
             heatmap = self.step1Heatmap.infer(data)
-            data.labels_unfiltered = self.step2Labels.make_labels(heatmap)
+            data.labels_unfiltered = self.step2Labels.make_labels(heatmap, data)
         else:
             for d in self.data_after_step2:
                 if d.name == data.name:
