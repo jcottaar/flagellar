@@ -456,6 +456,8 @@ class Model(BaseClass):
     def train(self, train_data, validation_data):
         if self.state>1:
             return
+        if self.seed is None:
+            self.seed = np.random.default_rng(seed=None).integers(0,1e6).item()
         train_data = copy.deepcopy(train_data)
         validation_data = copy.deepcopy(validation_data)
         for d in train_data:

@@ -32,6 +32,7 @@ import itertools
 import monai
 import gc
 import h5py
+import contextlib
 
 @dataclass(slots=True)
 class DatasetTrain(torch.utils.data.IterableDataset):
@@ -241,7 +242,7 @@ class UNetModel(fls.BaseClass):
 
         print('alter')
         device_type = torch.float32 if self.deterministic_train else torch.float16
-        mixed_precision_context = contextlib.null_context if self.deterministic_train else torch.amp.autocast('cuda')
+        mixed_precision_context = contextlib.nullcontext() if self.deterministic_train else torch.amp.autocast('cuda')
 
         for i_epoch in range(self.n_epochs):
             print(i_epoch, end=' ')

@@ -2,3 +2,4 @@
 __pycache__*
 analysis/yolo11n.pt
 analysis/yolov8m.pt
+*.pt
