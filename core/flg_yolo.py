@@ -37,7 +37,21 @@ class YOLOModel(fls.Model):
     use_augs = True
     use_pretrained_weights = True
     
+    hsv_h = 0.015
+    hsv_s = 0.7
+    hsv_v = 0.4
+    translate = 0.1
+    scale = 0.5
+    fliplr = 0.5
+    mosaic = 1.0
+    mixup = 0.2
+    auto_augment = 'randaugment'
+    erasing = 0.4
+    
     trained_model = 0
+    
+    
+            
 
     
    
@@ -353,12 +367,14 @@ class YOLOModel(fls.Model):
                     weight_decay=0.0005,  # Prevent overfitting
                     momentum=0.937,  # Momentum for better gradient updates
                     close_mosaic=10,  # Disable mosaic augmentation after 10 epochs
-                    mixup=0.2,  # Apply mixup augmentation
                     workers=4,  # Speed up data loading
                     augment=True,  # Enable additional augmentations
                     amp=True,  # Mixed precision training for faster performance
                     seed=self.seed,
+                    hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=0.0, translate=self.translate, scale=self.scale, shear=0.0, perspective=0.0, flipud=0.0, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=0.0, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=1.0,
                 )
+            
+            
             else:
                 results = model.train(
                     data=yaml_path,
@@ -379,7 +395,7 @@ class YOLOModel(fls.Model):
                     weight_decay=0.0005,  # Prevent overfitting
                     momentum=0.937,  # Momentum for better gradient updates
                     workers=4,  # Speed up data loading
-                    augment=False,  # Enable additional augmentations
+                    augment=True,  # Enable additional augmentations
                     amp=True,  # Mixed precision training for faster performance
                     seed=self.seed,
                     hsv_h=0.0, hsv_s=0.0, hsv_v=0.0, degrees=0.0, translate=0.0, scale=0.0, shear=0.0, perspective=0.0, flipud=0.0, fliplr=0.0, bgr=0.0, mosaic=0.0, mixup=0.0, copy_paste=0.0, auto_augment=None, erasing=0.0, crop_fraction=1.0,
