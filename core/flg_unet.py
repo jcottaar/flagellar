@@ -45,7 +45,10 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     offset_range_for_pos: tuple = field(init=True, default=(32,64,64))
 
     # Transforms
-    normalize: bool = field(init=True, default=True)
+    normalize: int = field(init=True, default=1)
+    # 0: don't normalize
+    # 1: mean std normalization
+    # 2: 98% 2% normalization with clipping
 
     # Target settings
     radius: float = field(init=True, default=200.) # in angstrom, not pixels!
@@ -64,9 +67,14 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     data_list: list = field(init=True, default_factory=list)
 
     def _preprocess(self, image, mean_list, std_list, percentile_list):
-        if self.normalize:
+        if self.normalize==1:
             for ii in range(image.shape[0]):
                 image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
+        if self.normalize==2:
+            for ii in range(image.shape[0]):
+                image[ii,:,:] = (image[ii,:,:]-percentile_list[2,ii])/(percentile_list[5,ii]-percentile_list[2,ii])
+            image[image>1.] = 1.
+            image[image<0.] = 0.
     
 
     #@fls.profile_each_line

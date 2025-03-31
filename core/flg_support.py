@@ -228,7 +228,7 @@ class Data(BaseClass):
     voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom
     mean_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
     std_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray(0))
-    percentiles_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray((101,0)))
+    percentiles_per_slice: np.ndarray = field(init=False, default_factory = lambda:np.ndarray((8,0))) # [0,1,2,5,95,98,99,100]
     resize_factor: float = field(init=True, default=1.)
 
     # Loading options
