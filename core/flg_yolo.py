@@ -28,6 +28,7 @@ import math
 import flg_support as fls
 import shutil
 from dataclasses import dataclass, field, fields
+import copy
 
 
 @dataclass
@@ -113,7 +114,13 @@ class YOLOModel(fls.Model):
                 dict: A summary containing dataset statistics and file paths.
             """
             # Load the labels CSV
-            labels_df = pd.read_csv(os.path.join(data_path, "train_labels.csv"))
+            tl = []
+            for d in (train_data+validation_data):
+                tl.append(copy.deepcopy(d.labels))
+                tl[-1]['tomo_id'] = d.name
+                tl[-1]['a0shape'] = d.data_shape[0]                    
+            labels_df = pd.concat(tl, axis=0).reset_index()        
+            #labels_df = pd.read_csv(os.path.join(data_path, "train_labels.csv"))
 
             train_data_filtered = []
             for d in train_data:
@@ -136,17 +143,15 @@ class YOLOModel(fls.Model):
             def process_tomogram_set(tomogram_ids, images_dir, labels_dir, set_name):
                 motor_counts = []
                 for tomo_id in tomogram_ids:
-                    # Get motor annotations for the current tomogram
+                     #Get motor annotations for the current tomogram
                     tomo_motors = labels_df[labels_df['tomo_id'] == tomo_id]
-                    for _, motor in tomo_motors.iterrows():
-                        if pd.isna(motor['Motor axis 0']):
-                            continue
+                    for _, motor in tomo_motors.iterrows():                        
                         motor_counts.append(
                             (tomo_id, 
-                             int(motor['Motor axis 0']), 
-                             int(motor['Motor axis 1']), 
-                             int(motor['Motor axis 2']),
-                             int(motor['Array shape (axis 0)']))
+                             int(motor['z']), 
+                             int(motor['y']), 
+                             int(motor['x']),
+                             int(motor['a0shape']))
                         )
                 
                 print(f"Will process approximately {len(motor_counts) * (2 * trust + 1)} slices for {set_name}")
