@@ -24,7 +24,9 @@ def test_unet(update_reference=False):
     model.seed = 42
     model.train(train_data[1:3], train_data[4:5])
     train_data[4].load_to_memory()
-    heatmap = model.infer(train_data[4])
+    d = fls.load_all_test_data()[1]
+    d.load_to_memory()
+    heatmap = model.infer(d)
     plt.figure()
     plt.imshow(np.max(heatmap, axis=0), cmap='bone')
     plt.colorbar()
@@ -43,7 +45,7 @@ def test_yolo(update_reference=False):
     model.seed = 0
     model.n_epochs = 5
     model.train(train_data[1:150], train_data[16:30])
-    res = [r.labels for r in model.infer(train_data[19:21])]
+    res = [r.labels for r in model.infer(fls.load_all_test_data()[1:3])]
 
     print(res)
 
