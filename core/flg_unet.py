@@ -83,46 +83,51 @@ class DatasetTrain(torch.utils.data.IterableDataset):
         def get_next():
             #t=time.time()
             # Determine which location in which tomogram we will use
-            if i_set%(self.n_positive+self.n_random)<self.n_positive:
-                # Center around a motor
-                while True:
-                    row = rng.integers(0,len(all_train_labels))
-                    if not all_train_labels['z'][row]==-1:
-                        break
-                loc = all_train_labels['ind'][row]
-                #assert(loc.shape == (1,1))
-                dataset = self.data_list[loc]
-                coords = [int(all_train_labels['z'][row]*dataset.resize_factor), int(all_train_labels['y'][row]*dataset.resize_factor), int(all_train_labels['x'][row]*dataset.resize_factor)]                
+            while True:
+                if i_set%(self.n_positive+self.n_random)<self.n_positive:
+                    # Center around a motor
+                    while True:
+                        row = rng.integers(0,len(all_train_labels))
+                        if not all_train_labels['z'][row]==-1:
+                            break
+                    loc = all_train_labels['ind'][row]
+                    #assert(loc.shape == (1,1))
+                    dataset = self.data_list[loc]
+                    coords = [int(all_train_labels['z'][row]*dataset.resize_factor), int(all_train_labels['y'][row]*dataset.resize_factor), int(all_train_labels['x'][row]*dataset.resize_factor)]                
+                    for i in range(3):
+                        coords[i] = coords[i] + rng.integers(-self.offset_range_for_pos[i], self.offset_range_for_pos[i])
+                        if coords[i]<self.size[i]//2: coords[i] = self.size[i]//2                    
+                        if coords[i]>dataset.data_shape[i]-self.size[i]//2-1: coords[i] = dataset.data_shape[i]-self.size[i]//2-1
+                    #print(dataset.name,dataset.data_shape,coords)
+                else:
+                    # Pick at random
+                    #print('rand')
+                    index = rng.choice(range(len(volumes)), p=volumes/np.sum(volumes))
+                    dataset = self.data_list[index]
+                    coords = []
+                    try:
+                        for i in range(3):
+                            coords.append(rng.integers(self.size[i]//2, dataset.data_shape[i]-self.size[i]//2-1))
+                    except:
+                        continue
+                    #print(dataset.name,dataset.data_shape,coords)
+    
+                #print(dataset.name)
+                #print('1', t-time.time())
+                # Pick the tomogram data            
+                slices = []
                 for i in range(3):
-                    coords[i] = coords[i] + rng.integers(-self.offset_range_for_pos[i], self.offset_range_for_pos[i])
-                    if coords[i]<self.size[i]//2: coords[i] = self.size[i]//2                    
-                    if coords[i]>dataset.data_shape[i]-self.size[i]//2-1: coords[i] = dataset.data_shape[i]-self.size[i]//2-1
-                #print(dataset.name,dataset.data_shape,coords)
-            else:
-                # Pick at random
-                #print('rand')
-                index = rng.choice(range(len(volumes)), p=volumes/np.sum(volumes))
-                dataset = self.data_list[index]
-                coords = []
-                for i in range(3):
-                    coords.append(rng.integers(self.size[i]//2, dataset.data_shape[i]-self.size[i]//2-1))
-                #print(dataset.name,dataset.data_shape,coords)
-
-            #print(dataset.name)
-            #print('1', t-time.time())
-            # Pick the tomogram data            
-            slices = []
-            for i in range(3):
-                slices.append(slice(coords[i]-self.size[i]//2, coords[i]+self.size[i]//2))
-            with h5py.File(dataset.data) as f:
-                image = f['data'][tuple(slices)][...].astype(np.float32)
-            self._preprocess(image, dataset.mean_per_slice[slices[0]], dataset.std_per_slice[slices[0]], dataset.percentiles_per_slice[:,slices[0]])
-            # if self.normalize:
-            #     mean_list = dataset.mean_per_slice[slices[0]]
-            #     std_list = dataset.std_per_slice[slices[0]]
-            #     for ii in range(image.shape[0]):
-            #         image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
-            assert image.shape == self.size
+                    slices.append(slice(coords[i]-self.size[i]//2, coords[i]+self.size[i]//2))
+                with h5py.File(dataset.data) as f:
+                    image = f['data'][tuple(slices)][...].astype(np.float32)
+                self._preprocess(image, dataset.mean_per_slice[slices[0]], dataset.std_per_slice[slices[0]], dataset.percentiles_per_slice[:,slices[0]])
+                # if self.normalize:
+                #     mean_list = dataset.mean_per_slice[slices[0]]
+                #     std_list = dataset.std_per_slice[slices[0]]
+                #     for ii in range(image.shape[0]):
+                #         image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
+                if image.shape == self.size:
+                    break
 
             #print('2', t-time.time())
 
@@ -210,7 +215,7 @@ class UNetModel(fls.BaseClass):
     deterministic_train = False
     save_model_every = 100
     plot_every = 500
-    n_images_test = 100
+    n_images_test = 300
     test_loss_every = 10
 
     # Trained
@@ -245,13 +250,15 @@ class UNetModel(fls.BaseClass):
         dataset_test = copy.deepcopy(self.dataset)
         dataset_test.return_float32 = self.deterministic_train
         dataset_test.data_list = copy.deepcopy(validation_data)
-        data_loader_test = iter(torch.utils.data.DataLoader(dataset_test,batch_size=self.n_images_test,num_workers=1,pin_memory=True,persistent_workers=True))
+        data_loader_test = iter(torch.utils.data.DataLoader(dataset_test,batch_size=self.n_images_test,num_workers=0,pin_memory=True,persistent_workers=False))
+        images_test, targets_test = next(data_loader_test)         
 
         self.dataset.data_list = copy.deepcopy(train_data)
         self.dataset.return_float32 = self.deterministic_train
         if not self.seed is None:
             self.dataset.seed = self.seed+1
-        data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=1,pin_memory=True,persistent_workers=True))
+        data_loader = iter(torch.utils.data.DataLoader(self.dataset,batch_size=self.n_images_per_update,num_workers=1,pin_memory=True,persistent_workers=True,prefetch_factor=10))
+        
 
         scaler = torch.amp.GradScaler('cuda')
 
@@ -294,13 +301,12 @@ class UNetModel(fls.BaseClass):
 
             if (i_epoch+1)%self.test_loss_every==0:
                 running_loss1 = 0.0
-                running_loss2 = 0.0
-                images, targets = next(data_loader_test)                
+                running_loss2 = 0.0                       
                 with torch.no_grad(), mixed_precision_context:
                     N=self.dataset.n_positive + self.dataset.n_random
-                    for i_image in range(images.shape[0]//N):
-                        image_device = images[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
-                        target_device = targets[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                    for i_image in range(images_test.shape[0]//N):
+                        image_device = images_test[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
+                        target_device = targets_test[N*i_image:N*i_image+N,np.newaxis,:,:,:].to(device, dtype=torch.float16, non_blocking=True)
                         output = model(image_device)  
                         loss1 = criterion1(output, target_device)
                         loss2 = criterion2(output, target_device)  
@@ -308,12 +314,12 @@ class UNetModel(fls.BaseClass):
                         running_loss2 += loss2.detach()              
 
                 
-                epoch_loss1 = N*running_loss1.item() / images.shape[0]
-                epoch_loss2 = N*running_loss2.item() / images.shape[0]  
+                epoch_loss1 = N*running_loss1.item() / images_test.shape[0]
+                epoch_loss2 = N*running_loss2.item() / images_test.shape[0]  
                 self.test_loss_epochs.append(i_epoch)
                 self.test_loss_list2.append(epoch_loss2)
-                del images
-                del targets
+                #del images_test
+                #del targets_test
 
             if not self.save_model_every is None and (i_epoch+1)%self.save_model_every==0:
                 model_save = copy.deepcopy(model)

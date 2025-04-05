@@ -45,7 +45,7 @@ def test_yolo(update_reference=False):
     model.seed = 0
     model.n_epochs = 5
     model.train(train_data[1:150], train_data[16:30])
-    res = [r.labels for r in model.infer(fls.load_all_test_data()[1:3])]
+    res = [r.labels for r in model.infer(train_data[19:21])]
 
     print(res)
 

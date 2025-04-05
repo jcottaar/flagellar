@@ -61,7 +61,7 @@ match env:
         loader_threads = 32
     case 'kaggle':
         data_dir = '/kaggle/input/byu-locating-bacterial-flagellar-motors-2025/'
-        temp_dir = '/kaggle/temp/'
+        temp_dir = '/kaggle/working/temp/'
         h5py_cache_dir = '/kaggle/temp/cache/'
         model_dir = '/kaggle/input/my-flg-models/'
         output_dir = '/kaggle/working/'
@@ -87,6 +87,8 @@ def recommend_n_workers():
     return torch.cuda.device_count()
 
 n_cuda_devices = recommend_n_workers()
+process_name = multiprocess.current_process().name
+print(process_name)
 if not multiprocess.current_process().name == "MainProcess":
     pid = int(multiprocess.current_process().name[-1])-1    
     os.environ["CUDA_VISIBLE_DEVICES"] = str(np.mod(pid, n_cuda_devices))
@@ -215,6 +217,8 @@ Data definition and loading
 '''
 loading_executor = None
 all_train_labels = pd.read_csv(data_dir + 'train_labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
+if env=='local':
+    extra_train_labels = pd.read_csv(data_dir + '/extra2/labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
 @dataclass
 class Data(BaseClass):
     # Holds one cryoET measurement, including ground truth or predicted labels
@@ -247,6 +251,16 @@ class Data(BaseClass):
             assert(self.std_per_slice.shape==(self.data_shape[0],))
             assert(self.percentiles_per_slice.shape==(8,self.data_shape[0]))
 
+    def unload(self):
+        self.data = None
+        self.mean_per_slice = np.ndarray(0)
+        self.std_per_slice = np.ndarray(0)
+        self.percentiles_per_slice = np.ndarray((8,0))
+        self.loaded_state = 'unloaded'
+        self.check_constraints()    
+
+class DataKaggle(Data):
+
     def _h5_filename(self):
         base_name = self.name
         if not self.target_size is None:
@@ -259,6 +273,18 @@ class Data(BaseClass):
                 if not os.path.isfile(filename):
                     filename = '/kaggle/input/byu-flagellar-motors-as-h5py-part-3/' + base_name + '.h5';                     
         return filename
+
+    def _load_from_h5py(self, actually_load_data):
+        with h5py.File(self._h5_filename(), 'r') as f:  
+            if actually_load_data:
+                self.data = f['data'][...]
+            else:
+                self.data = self._h5_filename()        
+            self.mean_per_slice = f['mean_per_slice'][...]
+            self.std_per_slice = f['std_per_slice'][...]
+            self.percentiles_per_slice = f['percentiles_per_slice'][...]
+            self.resize_factor = f['resize_factor'][...].item()
+            self.data_shape = f['data'].shape
         
     def load_to_h5py(self):
         assert self.is_train
@@ -282,14 +308,8 @@ class Data(BaseClass):
                 dset=f.create_dataset('resize_factor', shape = (), dtype='float64')                
                 dset[...] = self.resize_factor
 
-        # Import h5py
-        with h5py.File(filename, 'r') as f:        
-            self.data = filename
-            self.mean_per_slice = f['mean_per_slice'][...]
-            self.std_per_slice = f['std_per_slice'][...]
-            self.percentiles_per_slice = f['percentiles_per_slice'][...]
-            self.resize_factor = f['resize_factor'][...].item()
-            self.data_shape = f['data'].shape
+        # Import h5py   
+        self._load_from_h5py(False)            
 
         self.loaded_state = 'h5py'
         self.check_constraints()
@@ -300,13 +320,7 @@ class Data(BaseClass):
  
         if self.is_train and os.path.isfile(self._h5_filename()):
             # Load from cache
-            with h5py.File(self._h5_filename(), 'r') as f:
-                self.data = f['data'][...]
-                self.mean_per_slice = f['mean_per_slice'][...]
-                self.std_per_slice = f['std_per_slice'][...]
-                self.percentiles_per_slice = f['percentiles_per_slice'][...]
-                self.resize_factor = f['resize_factor'][...].item()
-                self.data_shape = self.data.shape
+            self._load_from_h5py(True)          
         else:
             # Read directly
             global loading_executor
@@ -375,15 +389,86 @@ class Data(BaseClass):
         self.loaded_state = 'memory'
         self.check_constraints()
 
-    def unload(self):
-        self.data = None
-        self.mean_per_slice = np.ndarray(0)
-        self.std_per_slice = np.ndarray(0)
-        self.loaded_state = 'unloaded'
-        self.check_constraints()            
+class DataExtra(Data):
+
+    def load_to_h5py(self):
+        if self.loaded_state == 'h5py': return
+
+        filename_base = data_dir + '/extra/' + self.name
+
+        data_pickle = dill_load(filename_base + '.pickle')
+
+        self.mean_per_slice = data_pickle['mean_per_slice']
+        self.std_per_slice = data_pickle['std_per_slice']
+        self.percentiles_per_slice = data_pickle['percentiles_per_slice']        
+        self.resize_factor = 1.
+
+        self.data = filename_base + '.h5'
+        with h5py.File(self.data) as f:
+            self.data_shape = f['data'].shape
+            
+        self.loaded_state = 'h5py'
+        self.check_constraints()
+
+    def load_to_memory(self):  
+        if self.loaded_state == 'memory': return
+
+        self.load_to_h5py()
+        with h5py.File(self.data) as f:
+            self.data = f['data'][...]
+        
+        self.loaded_state = 'memory'
+        self.check_constraints()
+
+class DataExtraYOLO(Data):
+
+    def load_to_h5py(self):
+        raise Exception('not supported')
+
+    def load_to_memory(self):  
+        if self.loaded_state == 'memory': return
+
+        self.data = np.load(data_dir+'/extra2/volumes/'+self.name+'.npy')
+        self.data_shape = self.data.shape
+
+        if env=='vast':
+            if not self.target_size is None:
+                raise 'todo'
+            self.mean_per_slice = np.mean(self.data,axis=(1,2))
+            self.std_per_slice = np.std(self.data,axis=(1,2))
+            self.percentiles_per_slice = np.percentile(self.data, [0,1,2,5,95,98,99,100], axis=(1,2))                
+        else:
+            claim_gpu('cupy')
+            import cupy as cp            
+            data_cp = cp.array(self.data)   
+            if not self.target_size is None:
+                import cupyx.scipy.ndimage
+                print(data_cp.shape)
+                self.resize_factor = min(self.target_size/self.data.shape[1], self.target_size/self.data.shape[2])
+                #new_shape = np.round(np.array(self.data.shape)*self.resize_factor).astype(int)
+                #print(new_shape)
+                test_data = cupyx.scipy.ndimage.zoom(data_cp[0,:,:], self.resize_factor)
+                data_new = cp.zeros((data_cp.shape[0], test_data.shape[0], test_data.shape[1]), dtype=data_cp.dtype)
+                for ii in range(self.data.shape[0]):
+                    data_new[ii,:,:] = cupyx.scipy.ndimage.zoom(data_cp[ii,:,:], self.resize_factor)
+                data_cp = data_new
+                test_data = cupyx.scipy.ndimage.zoom(data_cp[:,0,0], self.resize_factor)
+                data_new = cp.zeros((test_data.shape[0], data_cp.shape[1], data_cp.shape[2]), dtype=data_cp.dtype)
+                for ii in range(data_cp.shape[1]):
+                    data_new[:,ii,:] = cupyx.scipy.ndimage.zoom(data_cp[:,ii,:], (self.resize_factor,1.))
+                data_cp = data_new
+                print(data_cp.shape)
+            self.mean_per_slice = cp.asnumpy(cp.mean(data_cp,axis=(1,2)))
+            self.std_per_slice = cp.asnumpy(cp.std(data_cp,axis=(1,2)))
+            self.percentiles_per_slice = cp.asnumpy(cp.percentile(data_cp, [0,1,2,5,95,98,99,100], axis=(1,2)))                
+            self.data = cp.asnumpy(data_cp)
+        
+        self.loaded_state = 'memory'
+        self.check_constraints()
+
 
 def load_one_measurement(name, is_train, include_train_labels):
-    result = Data()
+    result = DataKaggle()
     result.name = name
     result.is_train = is_train
     if include_train_labels:
@@ -397,6 +482,33 @@ def load_one_measurement(name, is_train, include_train_labels):
             result.labels = result.labels[0:0]
         result.voxel_spacing = this_labels[0:1][['Voxel spacing']].to_numpy()[0,0]
         result.data_shape = (this_labels[0:1][['Array shape (axis 0)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 1)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 2)']].to_numpy()[0,0])
+    result.check_constraints()    
+    return result
+
+def load_one_measurement_extra(name, include_train_labels):
+    result = DataExtra()
+    result.name = name
+    result.is_train = True        
+    if include_train_labels:
+        data_pickle = dill_load(data_dir + '/extra/' + name + '.pickle')
+        result.voxel_spacing = data_pickle['voxel_spacing']
+        d=dict()
+        d['tomo_id'] = name
+        d['z'] = data_pickle['inds'][0]
+        d['y'] = data_pickle['inds'][1]
+        d['x'] = data_pickle['inds'][2]
+        result.labels = pd.DataFrame([d])
+    result.check_constraints()    
+    return result
+
+def load_one_measurement_extra_for_yolo(name, include_train_labels):
+    result = DataExtraYOLO()
+    result.name = name
+    result.is_train = True        
+    if include_train_labels:
+        data_pickle = dill_load(data_dir + '/extra/' + name + '.pickle')
+        result.voxel_spacing = data_pickle['voxel_spacing']
+        result.labels = copy.deepcopy(extra_train_labels[extra_train_labels['tomo_id']==name]).reset_index()
     result.check_constraints()    
     return result
 
@@ -423,6 +535,19 @@ def load_all_test_data():
         name = d[max(d.rfind('\\'), d.rfind('/'))+1:]
         result.append(load_one_measurement(name, False, False))
     return result
+
+def load_all_extra_data(for_yolo=False):
+    files = glob.glob(data_dir + 'extra/*.h5')
+    files.sort()
+    result = []
+    for f in files:
+        name = f[max(f.rfind('\\'), f.rfind('/'))+1:-3]
+        if for_yolo:
+            result.append(load_one_measurement_extra_for_yolo(name, True))
+        else:
+            result.append(load_one_measurement_extra(name, True))
+    return result
+    
 '''
 General model definition
 '''
@@ -501,7 +626,7 @@ class Model(BaseClass):
             result = []
             for xx in test_data:     
                 t = time.time()
-                x = copy.deepcopy(xx)                             
+                x = copy.deepcopy(xx)                   
                 x = self._infer_single(x)
                 x.unload()
                 result.append(x)

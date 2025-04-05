@@ -37,6 +37,7 @@ class YOLOModel(fls.Model):
     n_epochs = 30
     use_augs = True
     use_pretrained_weights = True
+    fix_norm_bug = False
     
     hsv_h = 0.015
     hsv_s = 0.7
@@ -518,7 +519,7 @@ class YOLOModel(fls.Model):
             Process a single tomogram and return the most confident motor detection.
             """
             print(f"Processing tomogram {tomo_id} ({index}/{total})")
-            tomo_dir = tomo_id
+            tomo_dir = img_dir
             slice_files = sorted([f for f in os.listdir(tomo_dir) if f.endswith('.jpg')])
 
             selected_indices = np.linspace(0, len(slice_files)-1, int(len(slice_files) * CONCENTRATION))
@@ -629,6 +630,18 @@ class YOLOModel(fls.Model):
             except Exception as e:
                 print(f"Error with YOLO processing: {e}")
 
+        data.load_to_memory()
+        if self.fix_norm_bug:
+            for ii in range(data.data.shape[0]):
+                data.data[ii,:,:] = normalize_slice(data.data[ii,:,:])
+        img_dir = fls.temp_dir + '/yolo_img_temp' + fls.process_name + '/'
+        try: shutil.rmtree(img_dir)
+        except: pass
+        os.makedirs(img_dir)
+        for ii in range(data.data.shape[0]):
+            cv2.imwrite(img_dir + f"slice_{ii:04d}.jpg", data.data[ii,:,:])
+            
+            
         CONFIDENCE_THRESHOLD = 0.45
         MAX_DETECTIONS_PER_TOMO = 3
         NMS_IOU_THRESHOLD = 0.2

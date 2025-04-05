@@ -8,7 +8,7 @@ import numpy as np
 import copy
 
 
-def animate_3d_matrix(animation_arr, fps=20, figsize=(6,6)):
+def animate_3d_matrix(animation_arr, fps=20, figsize=(6,6), axis_off=True):
 
     animation_arr= copy.deepcopy(animation_arr[...])
     
@@ -17,7 +17,8 @@ def animate_3d_matrix(animation_arr, fps=20, figsize=(6,6)):
 
     im = plt.imshow(animation_arr[0], cmap='bone')    
     plt.clim([0, 1])
-    plt.axis('off')
+    if axis_off:
+        plt.axis('off')
     #plt.title(f"{tomo_id}", fontweight="bold")
 
     min_val = np.percentile(animation_arr, 2)
