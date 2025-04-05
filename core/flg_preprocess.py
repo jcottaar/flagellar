@@ -86,10 +86,11 @@ class Preprocessor(fls.BaseClass):
         
         # Cast to uint8
         if self.return_uint8:
-            assert self.scale_percentile
-            assert self.scale_percentile_clip
+            if self.scale_percentile:
+                img = (255*img).astype(cp.uint8)
+            else:
+                img = (img).astype(cp.uint8)
             assert not self.scale_std
-            img = (255*img).astype(cp.uint8)
 
         data.data = cp.asnumpy(img)
 

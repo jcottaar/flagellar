@@ -80,6 +80,8 @@ def test_yolo(update_reference=False):
     model.seed = 0
     model.n_epochs = 5
     model.train(train_data[1:150], train_data[216:230])
+    fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
+    #model = fls.dill_load(fls.temp_dir + 'yolo_test.pickle')
     res = [r.labels for r in model.infer(train_data[19:21])]
 
     print(res)

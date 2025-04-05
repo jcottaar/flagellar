@@ -200,6 +200,8 @@ class YOLOModel(fls.Model):
         print(f"- Dataset directory: {summary['dataset_dir']}")
         print(f"- YAML configuration: {summary['yaml_path']}")
         print("\nReady for YOLO training!")
+
+        fls.claim_gpu('pytorch')
         
         # # Define paths for the Kaggle environment
         yolo_weights_dir = fls.temp_dir + '/yolo_weights/'
@@ -458,26 +460,9 @@ class YOLOModel(fls.Model):
             else:
                 streams = [None]
             
-            next_batch_thread = None
-            next_batch_images = None
-            
             for batch_start in range(0, len(slice_files), BATCH_SIZE):
-                if next_batch_thread is not None:
-                    next_batch_thread.join()
-                    next_batch_images = None
-                    
                 batch_end = min(batch_start + BATCH_SIZE, len(slice_files))
                 batch_files = slice_files[batch_start:batch_end]
-                
-                next_batch_start = batch_end
-                next_batch_end = min(next_batch_start + BATCH_SIZE, len(slice_files))
-                next_batch_files = slice_files[next_batch_start:next_batch_end] if next_batch_start < len(slice_files) else []
-                if next_batch_files:
-                    next_batch_paths = [os.path.join(tomo_dir, f) for f in next_batch_files]
-                    next_batch_thread = threading.Thread(target=preload_image_batch, args=(next_batch_paths,))
-                    next_batch_thread.start()
-                else:
-                    next_batch_thread = None
                 
                 sub_batches = np.array_split(batch_files, len(streams))
                 for i, sub_batch in enumerate(sub_batches):
@@ -488,7 +473,8 @@ class YOLOModel(fls.Model):
                         sub_batch_paths = [os.path.join(tomo_dir, slice_file) for slice_file in sub_batch]
                         sub_batch_slice_nums = [int(slice_file.split('_')[1].split('.')[0]) for slice_file in sub_batch]
                         with GPUProfiler(f"Inference batch {i+1}/{len(sub_batches)}"):
-                            sub_results = model(sub_batch_paths, verbose=False)
+                            with torch.amp.autocast('cuda') and torch.no_grad():
+                                sub_results = model(sub_batch_paths, verbose=False)
                         for j, result in enumerate(sub_results):
                             if len(result.boxes) > 0:
                                 for box_idx, confidence in enumerate(result.boxes.conf):
@@ -504,10 +490,7 @@ class YOLOModel(fls.Model):
                                         })
                 if device.startswith('cuda'):
                     torch.cuda.synchronize()
-            
-            if next_batch_thread is not None:
-                next_batch_thread.join()
-            
+
             final_detections = perform_3d_nms(all_detections, NMS_IOU_THRESHOLD)
             final_detections.sort(key=lambda x: x['confidence'], reverse=True)
             
@@ -522,48 +505,19 @@ class YOLOModel(fls.Model):
                 'Motor axis 2': round(best_detection['x'])
             }
         
-        def debug_image_loading(tomo_id):
-            """
-            Debug function to test image loading methods.
-            """
-            tomo_dir = os.path.join(test_dir, tomo_id)
-            slice_files = sorted([f for f in os.listdir(tomo_dir) if f.endswith('.jpg')])
-            if not slice_files:
-                print(f"No image files found in {tomo_dir}")
-                return
-                
-            print(f"Found {len(slice_files)} image files in {tomo_dir}")
-            sample_file = slice_files[len(slice_files)//2]
-            img_path = os.path.join(tomo_dir, sample_file)
-            
-            try:
-                img_pil = Image.open(img_path)
-                print(f"PIL Image shape: {np.array(img_pil).shape}, dtype: {np.array(img_pil).dtype}")
-                img_cv2 = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-                print(f"OpenCV Image shape: {img_cv2.shape}, dtype: {img_cv2.dtype}")
-                img_rgb = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-                print(f"OpenCV RGB Image shape: {img_rgb.shape}, dtype: {img_rgb.dtype}")
-                print("Image loading successful!")
-            except Exception as e:
-                print(f"Error loading image {img_path}: {e}")
-                
-            try:
-                test_model = YOLO(model_path)
-                test_results = test_model([img_path], verbose=False)
-                print("YOLO model successfully processed the test image")
-            except Exception as e:
-                print(f"Error with YOLO processing: {e}")
 
-        data.load_to_memory()
-        if self.fix_norm_bug:
-            for ii in range(data.data.shape[0]):
-                data.data[ii,:,:] = normalize_slice(data.data[ii,:,:])
-        img_dir = fls.temp_dir + '/yolo_img_temp' + fls.process_name + '/'
+        if not self.fix_norm_bug:
+            self.preprocessor.scale_std = False
+            self.preprocessor.scale_percentile = False
+        img_dir = fls.temp_dir + '/yolo_img_temp' + fls.process_name + '/'        
+        self.preprocessor.load_and_preprocess(data)        
         try: shutil.rmtree(img_dir)
         except: pass
         os.makedirs(img_dir)
         for ii in range(data.data.shape[0]):
             cv2.imwrite(img_dir + f"slice_{ii:04d}.jpg", data.data[ii,:,:])
+
+        fls.claim_gpu('pytorch')
             
             
         CONFIDENCE_THRESHOLD = 0.45
@@ -610,7 +564,6 @@ class YOLOModel(fls.Model):
         self.trained_model.to(device)
         if device.startswith('cuda'):
             self.trained_model.fuse()
-            self.trained_model.model.half()
 
         results = []
         motors_found = 0
