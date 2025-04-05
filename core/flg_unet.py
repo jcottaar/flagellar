@@ -215,11 +215,16 @@ class UNetModel(fls.BaseClass):
         # Prep caches
         def prep_cache(data_list):
             for i in range(len(data_list)):
-                self.preprocessor.load_and_preprocess(data_list[i])
-                with h5py.File(fls.h5py_cache_dir + data_list[i].name + '.h5', 'w') as f:
-                    dset=f.create_dataset('data', shape = data_list[i].data.shape, dtype='float16')
-                    dset[...] = data_list[i].data
-                data_list[i].unload()
+                filename = fls.h5py_cache_dir + data_list[i].name + '.h5';        
+                if not os.path.isfile(filename):
+                    self.preprocessor.load_and_preprocess(data_list[i])                       
+                    with h5py.File(filename, 'w') as f:
+                        dset=f.create_dataset('data', shape = data_list[i].data.shape, dtype='float16')
+                        dset[...] = data_list[i].data
+                    data_list[i].unload()
+                else:
+                    assert not self.preprocessor.resize
+                    data_list[i].resize_factor = 1. # also remember voxel spacing
         fls.remove_and_make_dir(fls.h5py_cache_dir)
         prep_cache(train_data)
         prep_cache(validation_data)
