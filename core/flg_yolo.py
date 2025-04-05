@@ -35,7 +35,6 @@ import copy
 class YOLOModel(fls.Model):
     #Input
     n_epochs = 30
-    use_augs = True
     use_pretrained_weights = True
     fix_norm_bug = False
     
@@ -85,23 +84,6 @@ class YOLOModel(fls.Model):
         TRUST = 4       # Number of slices above and below center slice (total slices = 2*TRUST + 1)
         BOX_SIZE = 24   # Bounding box size (in pixels)
         
-        # Define a helper function for image normalization using percentile-based contrast enhancement.
-        def normalize_slice(slice_data):
-            """
-            Normalize slice data using the 2nd and 98th percentiles.
-            
-            Args:
-                slice_data (numpy.array): Input image slice.
-            
-            Returns:
-                np.uint8: Normalized image in the range [0, 255].
-            """
-            p2 = np.percentile(slice_data, 2)
-            p98 = np.percentile(slice_data, 98)
-            clipped_data = np.clip(slice_data, p2, p98)
-            normalized = 255 * (clipped_data - p2) / (p98 - p2)
-            return np.uint8(normalized)
-        
         # Define the preprocessing function to extract slices, normalize, and generate YOLO annotations.
         def prepare_yolo_dataset(trust=TRUST):
             """
@@ -118,14 +100,6 @@ class YOLOModel(fls.Model):
             Returns:
                 dict: A summary containing dataset statistics and file paths.
             """
-            # Load the labels CSV
-            tl = []
-            for d in (train_data+validation_data):
-                tl.append(copy.deepcopy(d.labels))
-                tl[-1]['tomo_id'] = d.name
-                tl[-1]['a0shape'] = d.data_shape[0]                    
-            labels_df = pd.concat(tl, axis=0).reset_index()        
-            #labels_df = pd.read_csv(os.path.join(data_path, "train_labels.csv"))
 
             train_data_filtered = []
             for d in train_data:
@@ -137,19 +111,14 @@ class YOLOModel(fls.Model):
                     validation_data_filtered.append(d)
 
             # Set train and test
-            #train_tomos = [d.name for d in train_data_filtered]
-            #print(train_tomos[0:5])
             np.random.shuffle(train_data_filtered)
-            #print(train_tomos[0:5])
-            #val_tomos = [d.name for d in validation_data_filtered]
-
             
             # Helper function to process a list of tomograms
             def process_tomogram_set(data_list, images_dir, labels_dir, set_name):
                 motor_counts = []
                 for d in data_list:
                      #Get motor annotations for the current tomogram
-                    tomo_motors = labels_df[labels_df['tomo_id'] == d.name]
+                    tomo_motors = d.labels
                     for _, motor in tomo_motors.iterrows():                        
                         motor_counts.append(
                             (d, 
@@ -166,24 +135,9 @@ class YOLOModel(fls.Model):
                 for d, z_center, y_center, x_center, z_max in tqdm(motor_counts, desc=f"Processing {set_name} motors"):
                     z_min = max(0, z_center - trust)
                     z_max_bound = min(z_max - 1, z_center + trust)
+                    self.preprocessor.load_and_preprocess(d, desired_original_slices = slice(z_min,z_max_bound+1))
                     for z in range(z_min, z_max_bound + 1):
-                        # Create the slice filename and source path
-                        #slice_filename = f"slice_{z:04d}.jpg"
-                        #src_path = os.path.join(train_dir, d.name, slice_filename)
-                        #if not os.path.exists(src_path):
-                        #    print(f"Warning: {src_path} does not exist, skipping.")
-                        #    continue
-                        
-                        # Load, normalize, and save the image slice
-                        #img = Image.open(src_path)
-                        #img_array = np.array(img)
-                        #normalized_img_old = normalize_slice(img_array)
-                        
-                        self.preprocessor.load_and_preprocess(d, desired_original_slices = slice(z,z+1))
-                        #d.load_to_memory(desired_slices = slice(z,z+1))
-                        normalized_img = d.data[0,:,:]
-                        #normalized_img = normalize_slice(normalized_img)
-                        d.unload()               
+                        normalized_img = d.data[z-z_min,:,:]                                   
                         dest_filename = f"{d.name}_z{z:04d}_y{y_center:04d}_x{x_center:04d}.jpg"
                         dest_path = os.path.join(images_dir, dest_filename)
                         Image.fromarray(normalized_img).save(dest_path)
@@ -199,6 +153,7 @@ class YOLOModel(fls.Model):
                             f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
                         
                         processed_slices += 1
+                    d.unload()    
                 
                 return processed_slices, len(motor_counts)
             
@@ -216,12 +171,7 @@ class YOLOModel(fls.Model):
             }
             with open(os.path.join(yolo_dataset_dir, 'dataset.yaml'), 'w') as f:
                 yaml.dump(yaml_content, f, default_flow_style=False)
-            
-            # print(f"\nProcessing Summary:")
-            # print(f"- Train set: {len(train_tomos)} tomograms, {train_motors} motors, {train_slices} slices")
-            # print(f"- Validation set: {len(val_tomos)} tomograms, {val_motors} motors, {val_slices} slices")
-            # print(f"- Total: {len(train_tomos) + len(val_tomos)} tomograms, {train_motors + val_motors} motors, {train_slices + val_slices} slices")
-            
+                     
             return {
                 "dataset_dir": yolo_dataset_dir,
                 "yaml_path": os.path.join(yolo_dataset_dir, 'dataset.yaml'),
@@ -363,59 +313,32 @@ class YOLOModel(fls.Model):
             # Update a setting
             settings.update({"mlflow": False})
 
-            if self.use_augs:
-                results = model.train(
-                    data=yaml_path,
-                    epochs=epochs,
-                    batch=batch_size,
-                    imgsz=img_size,
-                    project=yolo_weights_dir,
-                    name='motor_detector',
-                    exist_ok=True,
-                    patience=10,  # Stop training if no improvement after 10 epochs
-                    save_period=5,  # Save model every 5 epochs
-                    val=True,
-                    verbose=True,
-                    optimizer="AdamW",  # AdamW optimizer for stability
-                    lr0=0.001,  # Initial learning rate
-                    lrf=0.01,  # Final learning rate factor
-                    cos_lr=True,  # Use cosine learning rate decay
-                    weight_decay=0.0005,  # Prevent overfitting
-                    momentum=0.937,  # Momentum for better gradient updates
-                    close_mosaic=10,  # Disable mosaic augmentation after 10 epochs
-                    workers=4,  # Speed up data loading
-                    augment=True,  # Enable additional augmentations
-                    amp=True,  # Mixed precision training for faster performance
-                    seed=self.seed,
-                    hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=0.0, translate=self.translate, scale=self.scale, shear=0.0, perspective=0.0, flipud=0.0, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=0.0, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=1.0,
-                )
-            
-            
-            else:
-                results = model.train(
-                    data=yaml_path,
-                    epochs=epochs,
-                    batch=batch_size,
-                    imgsz=img_size,
-                    project=yolo_weights_dir,
-                    name='motor_detector',
-                    exist_ok=True,
-                    patience=10,  # Stop training if no improvement after 10 epochs
-                    save_period=5,  # Save model every 5 epochs
-                    val=True,
-                    verbose=True,
-                    optimizer="AdamW",  # AdamW optimizer for stability
-                    lr0=0.001,  # Initial learning rate
-                    lrf=0.01,  # Final learning rate factor
-                    cos_lr=True,  # Use cosine learning rate decay
-                    weight_decay=0.0005,  # Prevent overfitting
-                    momentum=0.937,  # Momentum for better gradient updates
-                    workers=4,  # Speed up data loading
-                    augment=True,  # Enable additional augmentations
-                    amp=True,  # Mixed precision training for faster performance
-                    seed=self.seed,
-                    hsv_h=0.0, hsv_s=0.0, hsv_v=0.0, degrees=0.0, translate=0.0, scale=0.0, shear=0.0, perspective=0.0, flipud=0.0, fliplr=0.0, bgr=0.0, mosaic=0.0, mixup=0.0, copy_paste=0.0, auto_augment=None, erasing=0.0, crop_fraction=1.0,
-                )
+            results = model.train(
+                data=yaml_path,
+                epochs=epochs,
+                batch=batch_size,
+                imgsz=img_size,
+                project=yolo_weights_dir,
+                name='motor_detector',
+                exist_ok=True,
+                patience=10,  # Stop training if no improvement after 10 epochs
+                save_period=5,  # Save model every 5 epochs
+                val=True,
+                verbose=True,
+                optimizer="AdamW",  # AdamW optimizer for stability
+                lr0=0.001,  # Initial learning rate
+                lrf=0.01,  # Final learning rate factor
+                cos_lr=True,  # Use cosine learning rate decay
+                weight_decay=0.0005,  # Prevent overfitting
+                momentum=0.937,  # Momentum for better gradient updates
+                close_mosaic=10,  # Disable mosaic augmentation after 10 epochs
+                workers=4,  # Speed up data loading
+                augment=True,  # Enable additional augmentations
+                amp=True,  # Mixed precision training for faster performance
+                seed=self.seed,
+                hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=0.0, translate=self.translate, scale=self.scale, shear=0.0, perspective=0.0, flipud=0.0, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=0.0, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=1.0,
+            )
+        
         
             run_dir = os.path.join(yolo_weights_dir, 'motor_detector')
             
@@ -482,16 +405,7 @@ class YOLOModel(fls.Model):
         self.trained_model = YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt')
 
     def _infer_single(self,data):   
-        def normalize_slice(slice_data):
-            """
-            Normalize slice data using the 2nd and 98th percentiles.
-            """
-            p2 = np.percentile(slice_data, 2)
-            p98 = np.percentile(slice_data, 98)
-            clipped_data = np.clip(slice_data, p2, p98)
-            normalized = 255 * (clipped_data - p2) / (p98 - p2)
-            return np.uint8(normalized)
-        
+            
         def preload_image_batch(file_paths):
             """Preload a batch of images to CPU memory."""
             images = []
