@@ -416,6 +416,7 @@ class DataExtra(Data):
         self.load_to_h5py()
         with h5py.File(self.data) as f:
             self.data = f['data'][...]
+
         
         self.loaded_state = 'memory'
         self.check_constraints()

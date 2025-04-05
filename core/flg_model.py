@@ -152,6 +152,7 @@ class ThreeStepModel(fls.Model):
 
     def _train(self, train_data, validation_data):
         self.step1Heatmap.seed = self.seed
+        self.step1Heatmap.preprocessor = self.preprocessor
         if self.step1Heatmap.model==0:
             self.step1Heatmap.train(train_data, validation_data)
 

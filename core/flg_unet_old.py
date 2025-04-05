@@ -33,7 +33,6 @@ import monai
 import gc
 import h5py
 import contextlib
-import flg_preprocess
 
 @dataclass(slots=True)
 class DatasetTrain(torch.utils.data.IterableDataset):
@@ -66,6 +65,17 @@ class DatasetTrain(torch.utils.data.IterableDataset):
     
 
     data_list: list = field(init=True, default_factory=list)
+
+    def _preprocess(self, image, mean_list, std_list, percentile_list):
+        if self.normalize==1:
+            for ii in range(image.shape[0]):
+                image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
+        if self.normalize==2:
+            for ii in range(image.shape[0]):
+                image[ii,:,:] = (image[ii,:,:]-percentile_list[2,ii])/(percentile_list[5,ii]-percentile_list[2,ii])
+            image[image>1.] = 1.
+            image[image<0.] = 0.
+    
 
     #@fls.profile_each_line
     def __iter__(self): 
@@ -102,12 +112,20 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                         continue
                     #print(dataset.name,dataset.data_shape,coords)
     
+                #print(dataset.name)
+                #print('1', t-time.time())
                 # Pick the tomogram data            
                 slices = []
                 for i in range(3):
                     slices.append(slice(coords[i]-self.size[i]//2, coords[i]+self.size[i]//2))
-                with h5py.File(fls.h5py_cache_dir + dataset.name + '.h5') as f:
+                with h5py.File(dataset.data) as f:
                     image = f['data'][tuple(slices)][...].astype(np.float32)
+                self._preprocess(image, dataset.mean_per_slice[slices[0]], dataset.std_per_slice[slices[0]], dataset.percentiles_per_slice[:,slices[0]])
+                # if self.normalize:
+                #     mean_list = dataset.mean_per_slice[slices[0]]
+                #     std_list = dataset.std_per_slice[slices[0]]
+                #     for ii in range(image.shape[0]):
+                #         image[ii,:,:,] = (image[ii,:,:,]-mean_list[ii])/std_list[ii]
                 if image.shape == self.size:
                     break
 
@@ -119,7 +137,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 voxel_spacing = 6.5
             else:
                 voxel_spacing = dataset.voxel_spacing
-            radius_pix = self.radius/voxel_spacing
+            radius_pix = self.radius/voxel_spacing*dataset.resize_factor
             mask_size = np.ceil(radius_pix).astype(int)+2            
             inds = np.arange(-mask_size, mask_size+1)
             xx,yy,zz = np.meshgrid(inds, inds, inds, indexing="ij")             
@@ -156,7 +174,9 @@ class DatasetTrain(torch.utils.data.IterableDataset):
             #print('4', t-time.time())
             return image, target
                 
-        rng = np.random.default_rng(seed=self.seed)        
+        rng = np.random.default_rng(seed=self.seed)
+        for d in self.data_list:
+            d.load_to_h5py()
         volumes = np.array([np.prod(d.data_shape) for d in self.data_list]).astype(np.float64)
         names = [d.name for d in self.data_list]     
         tl = []
@@ -174,7 +194,6 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 class UNetModel(fls.BaseClass):
     # Data management
     dataset: object = field(init=True, default_factory=DatasetTrain)
-    preprocessor: object = field(init=True, default_factory=flg_preprocess.Preprocessor)
 
     # Learning rate
     learning_rate = 1e-3
@@ -210,19 +229,6 @@ class UNetModel(fls.BaseClass):
     
     def train(self,train_data,validation_data):
         #TODO: scheduler, ensemble, entropy weighting
-
-        # Prep caches
-        def prep_cache(data_list):
-            for i in range(len(data_list)):
-                data_list[i] = self.preprocessor.load_and_preprocess(data_list[i])
-                with h5py.File(fls.h5py_cache_dir + data_list[i].name + '.h5', 'w') as f:
-                    dset=f.create_dataset('data', shape = data_list[i].data.shape, dtype='float16')
-                    dset[...] = data_list[i].data
-                data_list[i].unload()
-        fls.remove_and_make_dir(fls.h5py_cache_dir)
-        prep_cache(train_data)
-        prep_cache(validation_data)
-        
         print(self.seed)
         cpu,device = fls.prep_pytorch(self.seed, self.deterministic_train, True)  
 
@@ -276,10 +282,6 @@ class UNetModel(fls.BaseClass):
                     running_loss2 += loss2.detach()
                     loss = self.entropy_weight*loss1 + loss2
                     scaler.scale(N*loss/images.shape[0]).backward()
-                    # plt.figure()
-                    # plt.imshow(image_device[0,0,10,:,:].detach().cpu().numpy(), cmap='bone')
-                    # plt.colorbar()
-                    
 
 
             epoch_loss1 = N*running_loss1.item() / images.shape[0]
@@ -343,13 +345,11 @@ class UNetModel(fls.BaseClass):
     def infer(self, data):
         #TODO: TTA
 
-        # Prepare data
-        data = self.preprocessor.load_and_preprocess(data)
-        
         cpu,device = fls.prep_pytorch(self.seed, True, False)
         
         # Prepare data and output
         image = torch.tensor(data.data, dtype=torch.float16).to(device)       
+        self.dataset._preprocess(image, data.mean_per_slice, data.std_per_slice, data.percentiles_per_slice)   
         image = image[None,None,:,:,:]
         pad_list = []
         for dim in [2,1,0]:

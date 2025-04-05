@@ -3,6 +3,7 @@ import flg_unet
 import flg_numerics
 import flg_model
 import flg_yolo
+import flg_preprocess
 import importlib
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,6 +12,7 @@ import copy
 
 importlib.reload(flg_unet)
 importlib.reload(flg_yolo)
+importlib.reload(flg_preprocess)
 
 def test_unet(update_reference=False):
     train_data = fls.load_all_train_data()
