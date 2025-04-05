@@ -111,7 +111,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 if image.shape == self.size:
                     break
 
-            print(dataset.name, coords)
+            #print(dataset.name, coords)
             #print('2', t-time.time())
 
             # Construct target
@@ -279,9 +279,9 @@ class UNetModel(fls.BaseClass):
                     running_loss2 += loss2.detach()
                     loss = self.entropy_weight*loss1 + loss2
                     scaler.scale(N*loss/images.shape[0]).backward()
-                    plt.figure()
-                    plt.imshow(image_device[0,0,10,:,:].detach().cpu().numpy(), cmap='bone')
-                    plt.colorbar()
+                    # plt.figure()
+                    # plt.imshow(image_device[0,0,10,:,:].detach().cpu().numpy(), cmap='bone')
+                    # plt.colorbar()
                     
 
 
@@ -353,9 +353,9 @@ class UNetModel(fls.BaseClass):
         
         # Prepare data and output
         image = torch.tensor(data.data, dtype=torch.float16).to(device)       
-        plt.figure()
-        plt.imshow(image.detach().cpu().numpy()[10,:,:])
-        plt.colorbar()
+        # plt.figure()
+        # plt.imshow(image.detach().cpu().numpy()[10,:,:])
+        # plt.colorbar()
         image = image[None,None,:,:,:]
         pad_list = []
         for dim in [2,1,0]:

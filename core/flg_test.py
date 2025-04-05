@@ -61,7 +61,6 @@ def test_unet_alt(update_reference=False):
     model.seed = 41
     model.train(train_data[1:3], train_data[4:5])
     d = fls.load_all_test_data()[1]
-    d.load_to_memory()
     heatmap = model.step1Heatmap.infer(d)
     plt.figure()
     plt.imshow(np.max(heatmap, axis=0), cmap='bone')

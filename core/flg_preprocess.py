@@ -47,7 +47,7 @@ class Preprocessor(fls.BaseClass):
         # Resize
         if self.resize:
             import cupyx.scipy.ndimage
-            print(img.shape)
+            #print(img.shape)
             data.resize_factor = min(self.resize_target/img.shape[1], self.resize_target/img.shape[2])
             #test_data = cupyx.scipy.ndimage.zoom(img[0,:,:], data.resize_factor)
             # data_new = cp.zeros((img.shape[0], test_data.shape[0], test_data.shape[1]), dtype=img.dtype)
@@ -59,7 +59,7 @@ class Preprocessor(fls.BaseClass):
             # for ii in range(img.shape[1]):
             #     data_new[:,ii,:] = cupyx.scipy.ndimage.zoom(img[:,ii,:], (data.resize_factor,1.))
             img = cupyx.scipy.ndimage.zoom(img, (data.resize_factor,data.resize_factor,data.resize_factor))
-            print(img.shape)
+            #print(img.shape)
 
             data.data_shape = img.shape
             data.voxel_spacing = data.voxel_spacing/data.resize_factor
