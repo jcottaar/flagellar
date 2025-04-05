@@ -52,7 +52,11 @@ class YOLOModel(fls.Model):
     
     trained_model = 0
     
-    
+    def __post_init__(self):
+        super().__post_init__()
+        self.preprocessor.scale_std = False
+        self.preprocessor.scale_percentile = True
+        self.preprocessor.return_uint8 = True
             
 
     
@@ -133,53 +137,59 @@ class YOLOModel(fls.Model):
                     validation_data_filtered.append(d)
 
             # Set train and test
-            train_tomos = [d.name for d in train_data_filtered]
-            print(train_tomos[0:5])
-            np.random.shuffle(train_tomos)
-            print(train_tomos[0:5])
-            val_tomos = [d.name for d in validation_data_filtered]
+            #train_tomos = [d.name for d in train_data_filtered]
+            #print(train_tomos[0:5])
+            np.random.shuffle(train_data_filtered)
+            #print(train_tomos[0:5])
+            #val_tomos = [d.name for d in validation_data_filtered]
 
             
             # Helper function to process a list of tomograms
-            def process_tomogram_set(tomogram_ids, images_dir, labels_dir, set_name):
+            def process_tomogram_set(data_list, images_dir, labels_dir, set_name):
                 motor_counts = []
-                for tomo_id in tomogram_ids:
+                for d in data_list:
                      #Get motor annotations for the current tomogram
-                    tomo_motors = labels_df[labels_df['tomo_id'] == tomo_id]
+                    tomo_motors = labels_df[labels_df['tomo_id'] == d.name]
                     for _, motor in tomo_motors.iterrows():                        
                         motor_counts.append(
-                            (tomo_id, 
+                            (d, 
                              int(motor['z']), 
                              int(motor['y']), 
                              int(motor['x']),
-                             int(motor['a0shape']))
+                             d.data_shape[0])
                         )
                 
                 print(f"Will process approximately {len(motor_counts) * (2 * trust + 1)} slices for {set_name}")
                 processed_slices = 0
                 
                 # Loop over each motor annotation
-                for tomo_id, z_center, y_center, x_center, z_max in tqdm(motor_counts, desc=f"Processing {set_name} motors"):
+                for d, z_center, y_center, x_center, z_max in tqdm(motor_counts, desc=f"Processing {set_name} motors"):
                     z_min = max(0, z_center - trust)
                     z_max_bound = min(z_max - 1, z_center + trust)
                     for z in range(z_min, z_max_bound + 1):
                         # Create the slice filename and source path
-                        slice_filename = f"slice_{z:04d}.jpg"
-                        src_path = os.path.join(train_dir, tomo_id, slice_filename)
-                        if not os.path.exists(src_path):
-                            print(f"Warning: {src_path} does not exist, skipping.")
-                            continue
+                        #slice_filename = f"slice_{z:04d}.jpg"
+                        #src_path = os.path.join(train_dir, d.name, slice_filename)
+                        #if not os.path.exists(src_path):
+                        #    print(f"Warning: {src_path} does not exist, skipping.")
+                        #    continue
                         
                         # Load, normalize, and save the image slice
-                        img = Image.open(src_path)
-                        img_array = np.array(img)
-                        normalized_img = normalize_slice(img_array)
-                        dest_filename = f"{tomo_id}_z{z:04d}_y{y_center:04d}_x{x_center:04d}.jpg"
+                        #img = Image.open(src_path)
+                        #img_array = np.array(img)
+                        #normalized_img_old = normalize_slice(img_array)
+                        
+                        self.preprocessor.load_and_preprocess(d, desired_original_slices = slice(z,z+1))
+                        #d.load_to_memory(desired_slices = slice(z,z+1))
+                        normalized_img = d.data[0,:,:]
+                        #normalized_img = normalize_slice(normalized_img)
+                        d.unload()               
+                        dest_filename = f"{d.name}_z{z:04d}_y{y_center:04d}_x{x_center:04d}.jpg"
                         dest_path = os.path.join(images_dir, dest_filename)
                         Image.fromarray(normalized_img).save(dest_path)
                         
                         # Prepare YOLO bounding box annotation (normalized values)
-                        img_width, img_height = img.size
+                        img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                         x_center_norm = x_center / img_width
                         y_center_norm = y_center / img_height
                         box_width_norm = BOX_SIZE / img_width
@@ -193,9 +203,9 @@ class YOLOModel(fls.Model):
                 return processed_slices, len(motor_counts)
             
             # Process training tomograms
-            train_slices, train_motors = process_tomogram_set(train_tomos, yolo_images_train, yolo_labels_train, "training")
+            train_slices, train_motors = process_tomogram_set(train_data_filtered, yolo_images_train, yolo_labels_train, "training")
             # Process validation tomograms
-            val_slices, val_motors = process_tomogram_set(val_tomos, yolo_images_val, yolo_labels_val, "validation")
+            val_slices, val_motors = process_tomogram_set(validation_data_filtered, yolo_images_val, yolo_labels_val, "validation")
             
             # Generate YAML configuration for YOLO training
             yaml_content = {
@@ -207,16 +217,16 @@ class YOLOModel(fls.Model):
             with open(os.path.join(yolo_dataset_dir, 'dataset.yaml'), 'w') as f:
                 yaml.dump(yaml_content, f, default_flow_style=False)
             
-            print(f"\nProcessing Summary:")
-            print(f"- Train set: {len(train_tomos)} tomograms, {train_motors} motors, {train_slices} slices")
-            print(f"- Validation set: {len(val_tomos)} tomograms, {val_motors} motors, {val_slices} slices")
-            print(f"- Total: {len(train_tomos) + len(val_tomos)} tomograms, {train_motors + val_motors} motors, {train_slices + val_slices} slices")
+            # print(f"\nProcessing Summary:")
+            # print(f"- Train set: {len(train_tomos)} tomograms, {train_motors} motors, {train_slices} slices")
+            # print(f"- Validation set: {len(val_tomos)} tomograms, {val_motors} motors, {val_slices} slices")
+            # print(f"- Total: {len(train_tomos) + len(val_tomos)} tomograms, {train_motors + val_motors} motors, {train_slices + val_slices} slices")
             
             return {
                 "dataset_dir": yolo_dataset_dir,
                 "yaml_path": os.path.join(yolo_dataset_dir, 'dataset.yaml'),
-                "train_tomograms": len(train_tomos),
-                "val_tomograms": len(val_tomos),
+                "train_tomograms": len(train_data_filtered),
+                "val_tomograms": len(validation_data_filtered),
                 "train_motors": train_motors,
                 "val_motors": val_motors,
                 "train_slices": train_slices,

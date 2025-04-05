@@ -85,7 +85,11 @@ class Preprocessor(fls.BaseClass):
             #    img[ii,:,:,] = (img[ii,:,:,]-mean_list[ii])/std_list[ii]
         
         # Cast to uint8
-        assert not self.return_uint8
+        if self.return_uint8:
+            assert self.scale_percentile
+            assert self.scale_percentile_clip
+            assert not self.scale_std
+            img = (255*img).astype(cp.uint8)
 
         data.data = cp.asnumpy(img)
 
