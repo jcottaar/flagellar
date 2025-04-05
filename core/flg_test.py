@@ -48,13 +48,17 @@ def test_unet_alt(update_reference=False):
     model.dataset.size = (64,64,64)
     model.dataset.offset_range_for_pos = (6,6,6)
     model.n_images_test = 1
-    model.n_epochs = 2
-    model.seed = 42
-    model.dataset.normalize = 2
+    model.n_epochs = 2    
+    #model.dataset.normalize = 2
     model2 = model
     model = flg_model.ThreeStepModel()
     model.step1Heatmap = model2
-    model.target_size = 320
+    #model.target_size = 320
+    model.preprocessor.scale_percentile = True
+    model.preprocessor.resize = True
+    model.preprocessor.resize_target= 320
+    model.preprocessor.scale_std = False
+    model.seed = 41
     model.train(train_data[1:3], train_data[4:5])
     d = fls.load_all_test_data()[1]
     d.load_to_memory()

@@ -223,8 +223,8 @@ Data definition and loading
 '''
 loading_executor = None
 all_train_labels = pd.read_csv(data_dir + 'train_labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
-if env=='local':
-    extra_train_labels = pd.read_csv(data_dir + '/extra2/labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
+#if env=='local':
+#    extra_train_labels = pd.read_csv(data_dir + '/extra2/labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
 @dataclass
 class Data(BaseClass):
     # Holds one cryoET measurement, including ground truth or predicted labels
@@ -396,7 +396,7 @@ class Model(BaseClass):
 
     def __post_init__(self):
         super().__post_init__()
-        import flg_preprocessing
+        import flg_preprocess
         self.preprocessor = flg_preprocess.Preprocessor()
         
 
@@ -412,10 +412,8 @@ class Model(BaseClass):
         validation_data = copy.deepcopy(validation_data)
         for d in train_data:
             d.unload()
-            d.target_size = self.target_size
         for d in validation_data:
             d.unload()
-            d.target_size = self.target_size
         self._train(train_data, validation_data)
         for d in train_data:
             d.unload()
@@ -433,7 +431,6 @@ class Model(BaseClass):
         for t in test_data:
             t.labels  = pd.DataFrame()
             t.unload()
-            t.target_size = self.target_size
         test_data = self._infer(test_data)
         for t in test_data:
             t.check_constraints()

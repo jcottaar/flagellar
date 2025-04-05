@@ -107,10 +107,11 @@ class DatasetTrain(torch.utils.data.IterableDataset):
                 for i in range(3):
                     slices.append(slice(coords[i]-self.size[i]//2, coords[i]+self.size[i]//2))
                 with h5py.File(fls.h5py_cache_dir + dataset.name + '.h5') as f:
-                    image = f['data'][tuple(slices)][...].astype(np.float32)
+                    image = f['data'][tuple(slices)][...]
                 if image.shape == self.size:
                     break
 
+            print(dataset.name, coords)
             #print('2', t-time.time())
 
             # Construct target
@@ -214,7 +215,7 @@ class UNetModel(fls.BaseClass):
         # Prep caches
         def prep_cache(data_list):
             for i in range(len(data_list)):
-                data_list[i] = self.preprocessor.load_and_preprocess(data_list[i])
+                self.preprocessor.load_and_preprocess(data_list[i])
                 with h5py.File(fls.h5py_cache_dir + data_list[i].name + '.h5', 'w') as f:
                     dset=f.create_dataset('data', shape = data_list[i].data.shape, dtype='float16')
                     dset[...] = data_list[i].data
@@ -244,6 +245,8 @@ class UNetModel(fls.BaseClass):
         dataset_test = copy.deepcopy(self.dataset)
         dataset_test.return_float32 = self.deterministic_train
         dataset_test.data_list = copy.deepcopy(validation_data)
+        if not self.seed is None:
+            dataset_test.seed = self.seed+2
         data_loader_test = iter(torch.utils.data.DataLoader(dataset_test,batch_size=self.n_images_test,num_workers=0,pin_memory=True,persistent_workers=False))
         images_test, targets_test = next(data_loader_test)         
 
@@ -276,9 +279,9 @@ class UNetModel(fls.BaseClass):
                     running_loss2 += loss2.detach()
                     loss = self.entropy_weight*loss1 + loss2
                     scaler.scale(N*loss/images.shape[0]).backward()
-                    # plt.figure()
-                    # plt.imshow(image_device[0,0,10,:,:].detach().cpu().numpy(), cmap='bone')
-                    # plt.colorbar()
+                    plt.figure()
+                    plt.imshow(image_device[0,0,10,:,:].detach().cpu().numpy(), cmap='bone')
+                    plt.colorbar()
                     
 
 
@@ -344,12 +347,15 @@ class UNetModel(fls.BaseClass):
         #TODO: TTA
 
         # Prepare data
-        data = self.preprocessor.load_and_preprocess(data)
+        self.preprocessor.load_and_preprocess(data)
         
         cpu,device = fls.prep_pytorch(self.seed, True, False)
         
         # Prepare data and output
         image = torch.tensor(data.data, dtype=torch.float16).to(device)       
+        plt.figure()
+        plt.imshow(image.detach().cpu().numpy()[10,:,:])
+        plt.colorbar()
         image = image[None,None,:,:,:]
         pad_list = []
         for dim in [2,1,0]:

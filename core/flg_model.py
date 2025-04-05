@@ -169,8 +169,8 @@ class ThreeStepModel(fls.Model):
         if not self.data_after_step2 == 0:
             prev_names = [d.name for d in self.data_after_step2]
         if self.data_after_step2 == 0 or not data.name in prev_names:
-            data.load_to_memory()
             heatmap = self.step1Heatmap.infer(data)
+            print('resize factor:', data.resize_factor)
             data.labels_unfiltered = self.step2Labels.make_labels(heatmap, data)
         else:
             for d in self.data_after_step2:

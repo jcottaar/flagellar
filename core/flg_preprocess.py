@@ -26,7 +26,7 @@ class Preprocessor(fls.BaseClass):
 
     # Resizing
     resize = False
-    resize_value = 640
+    resize_target = 640
 
     # Scaling
     scale_percentile = False
@@ -39,18 +39,42 @@ class Preprocessor(fls.BaseClass):
 
     def load_and_preprocess(self, data, desired_original_slices = slice(None,None,None)):
 
-        data = copy.deepcopy(data)
         data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
 
         fls.claim_gpu('cupy')
         img = cp.array(data.data, dtype=cp.float16)
 
-        # Resize, also adjust voxel spacing!
-        assert not self.resize
-        data.resize_factor = 1.
+        # Resize
+        if self.resize:
+            import cupyx.scipy.ndimage
+            print(img.shape)
+            data.resize_factor = min(self.resize_target/img.shape[1], self.resize_target/img.shape[2])
+            #test_data = cupyx.scipy.ndimage.zoom(img[0,:,:], data.resize_factor)
+            # data_new = cp.zeros((img.shape[0], test_data.shape[0], test_data.shape[1]), dtype=img.dtype)
+            # for ii in range(img.shape[0]):
+            #     data_new[ii,:,:] = cupyx.scipy.ndimage.zoom(img[ii,:,:], data.resize_factor)
+            # img = data_new
+            # test_data = cupyx.scipy.ndimage.zoom(img[:,0,0], data.resize_factor)
+            # data_new = cp.zeros((test_data.shape[0], img.shape[1], img.shape[2]), dtype=img.dtype)
+            # for ii in range(img.shape[1]):
+            #     data_new[:,ii,:] = cupyx.scipy.ndimage.zoom(img[:,ii,:], (data.resize_factor,1.))
+            img = cupyx.scipy.ndimage.zoom(img, (data.resize_factor,data.resize_factor,data.resize_factor))
+            print(img.shape)
+
+            data.data_shape = img.shape
+            data.voxel_spacing = data.voxel_spacing/data.resize_factor
+        else:
+            data.resize_factor = 1.
 
         # Scale percentile
-        assert not self.scale_percentile
+        if self.scale_percentile:
+            for ii in range(img.shape[0]):
+                perc_low = cp.percentile(img[ii,:,:], self.scale_percentile_value)
+                perc_high = cp.percentile(img[ii,:,:], 100-self.scale_percentile_value)
+                img[ii,:,:] = (img[ii,:,:]-perc_low)/(perc_high-perc_low)
+            if self.scale_percentile_clip:
+                img[img>1.] = 1.
+                img[img<0.] = 0.
 
         # Scale STD
         if self.scale_std:
@@ -64,7 +88,5 @@ class Preprocessor(fls.BaseClass):
         assert not self.return_uint8
 
         data.data = cp.asnumpy(img)
-
-        return data
 
     
