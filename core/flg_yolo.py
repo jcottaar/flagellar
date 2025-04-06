@@ -191,6 +191,8 @@ class YOLOModel(fls.Model):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(self.seed)
             torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            torch.use_deterministic_algorithms(True, warn_only=False)
         
         # Run the preprocessing
         summary = prepare_yolo_dataset(TRUST)
@@ -201,7 +203,7 @@ class YOLOModel(fls.Model):
         print(f"- YAML configuration: {summary['yaml_path']}")
         print("\nReady for YOLO training!")
 
-        fls.claim_gpu('pytorch')
+        #fls.claim_gpu('pytorch')
         
         # # Define paths for the Kaggle environment
         yolo_weights_dir = fls.temp_dir + '/yolo_weights/'
@@ -506,18 +508,22 @@ class YOLOModel(fls.Model):
             }
         
 
+        preprocessor = copy.deepcopy(self.preprocessor)
         if not self.fix_norm_bug:
-            self.preprocessor.scale_std = False
-            self.preprocessor.scale_percentile = False
+            preprocessor.scale_std = False
+            preprocessor.scale_percentile = False
         img_dir = fls.temp_dir + '/yolo_img_temp' + fls.process_name + '/'        
-        self.preprocessor.load_and_preprocess(data)        
+        preprocessor.load_and_preprocess(data)        
         try: shutil.rmtree(img_dir)
         except: pass
         os.makedirs(img_dir)
         for ii in range(data.data.shape[0]):
             cv2.imwrite(img_dir + f"slice_{ii:04d}.jpg", data.data[ii,:,:])
 
+        
         fls.claim_gpu('pytorch')
+
+        
             
             
         CONFIDENCE_THRESHOLD = 0.45
@@ -548,7 +554,9 @@ class YOLOModel(fls.Model):
         BATCH_SIZE = 8
         if device.startswith('cuda'):
             torch.backends.cudnn.benchmark = True
-            torch.backends.cudnn.deterministic = False
+            torch.backends.cudnn.deterministic = True
+            #raise 'stop'
+            torch.use_deterministic_algorithms(True, warn_only=False)            
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
             gpu_name = torch.cuda.get_device_name(0)
@@ -560,6 +568,7 @@ class YOLOModel(fls.Model):
         else:
             print("GPU not available, using CPU")
             BATCH_SIZE = 4
+
         
         self.trained_model.to(device)
         if device.startswith('cuda'):

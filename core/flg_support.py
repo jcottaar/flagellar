@@ -38,6 +38,8 @@ import shutil
 Determine environment and globals
 '''
 
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+
 is_submission = False
 if os.path.isdir('d:/flagellar/'):
     env = 'local'

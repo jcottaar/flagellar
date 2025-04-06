@@ -73,15 +73,9 @@ def test_unet_alt(update_reference=False):
     else:
         assert np.std(heatmap) == fls.dill_load(ref_name)
     
-
-def test_yolo(update_reference=False):
+def test_yolo_infer(update_reference=False):
     train_data = fls.load_all_train_data()
-    model = flg_yolo.YOLOModel()
-    model.seed = 0
-    model.n_epochs = 5
-    model.train(train_data[1:150], train_data[216:230])
-    fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
-    #model = fls.dill_load(fls.temp_dir + 'yolo_test.pickle')
+    model = fls.dill_load(fls.temp_dir + 'yolo_test.pickle')
     res = [r.labels for r in model.infer(train_data[19:21])]
 
     print(res)
@@ -91,12 +85,21 @@ def test_yolo(update_reference=False):
         fls.dill_save(ref_name, res)
     else:
         assert str(res) == str(fls.dill_load(ref_name))
+
+def test_yolo(update_reference=False):
+    train_data = fls.load_all_train_data()
+    model = flg_yolo.YOLOModel()
+    model.seed = 0
+    model.n_epochs = 5
+    model.train(train_data[1:150], train_data[216:230])
+    fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
+    test_yolo_infer(update_reference = update_reference)
     
     
 
 def run_all_tests(update_reference=False):
-    test_unet(update_reference=update_reference)
-    test_unet_alt(update_reference=update_reference)
     test_yolo(update_reference=update_reference)
+    test_unet(update_reference=update_reference)
+    test_unet_alt(update_reference=update_reference)    
     print('All tests passed')
     
