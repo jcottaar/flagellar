@@ -414,7 +414,7 @@ class Model(BaseClass):
     # Loads one or more cryoET measuerements
     state: int = field(init=False, default=0) # 0: untrained, 1: trained
     quiet: bool = field(init=False, default=True)
-    run_in_parallel: bool = field(init=False, default=False)    
+    run_in_parallel: bool = field(init=False, default=True)    
     seed: object = field(init=True, default=None)
 
     preprocessor: object = field(init=True, default = None)
