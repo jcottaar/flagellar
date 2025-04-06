@@ -70,19 +70,18 @@ class Preprocessor(fls.BaseClass):
         # Scale percentile
         if self.scale_percentile:
             for ii in range(img.shape[0]):
-                if ii in data.allowed_slices:
-                    perc_low = cp.percentile(img[ii,:,:], self.scale_percentile_value)
-                    perc_high = cp.percentile(img[ii,:,:], 100-self.scale_percentile_value)
-                    img[ii,:,:] = (img[ii,:,:]-perc_low)/(perc_high-perc_low)
+                perc_low = cp.percentile(img[ii,:,:], self.scale_percentile_value)
+                perc_high = cp.percentile(img[ii,:,:], 100-self.scale_percentile_value)
+                img[ii,:,:] = (img[ii,:,:]-perc_low)/(perc_high-perc_low)
             if self.scale_percentile_clip:
                 img[img>1.] = 1.
                 img[img<0.] = 0.
 
         # Scale STD
         if self.scale_std:
-            mean_per_slice = cp.mean(img[data.allowed_slices,:,:],axis=(1,2))
-            std_per_slice = cp.std(img[data.allowed_slices,:,:].astype(cp.float32),axis=(1,2)).astype(cp.float16)
-            img[data.allowed_slices,:,:] = (img[data.allowed_slices,:,:] - mean_per_slice[:,None,None]) / std_per_slice[:,None,None]
+            mean_per_slice = cp.mean(img,axis=(1,2))
+            std_per_slice = cp.std(img.astype(cp.float32),axis=(1,2)).astype(cp.float16)
+            img = (img - mean_per_slice[:,None,None]) / std_per_slice[:,None,None]
             #for ii in range(img.shape[0]):
             #    img[ii,:,:,] = (img[ii,:,:,]-mean_list[ii])/std_list[ii]
         

@@ -240,14 +240,14 @@ class Data(BaseClass):
     voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom    
 
     resize_factor: float = field(init=True, default=np.nan)
-    allowed_slices: list = field(init=True, default_factory=list)
+    slices_present: list = field(init=True, default_factory=list)
 
     def _check_constraints(self):
         if not self.loaded_state == 'unloaded':
             assert(len(self.data_shape)==3)
             assert self.loaded_state == 'memory'
             assert type(self.data)==np.ndarray
-            assert self.data.shape == self.data_shape            
+            assert self.data.shape == (len(self.slices_present), self.data_shape[1], self.data_shape[2]) 
 
     def unload(self):
         self.data = None        
@@ -269,6 +269,7 @@ class DataKaggle(Data):
         else:
             files = glob.glob(data_dir + 'test/' + self.name + '/*.jpg')
         files.sort()
+        shape0 = len(files)
         if not desired_slices is None:
             files_new = []
             for i in desired_slices:
@@ -279,9 +280,12 @@ class DataKaggle(Data):
         imgs = list(loading_executor.map(load_image, files))            
         self.data = np.stack(imgs)       
 
-        self.allowed_slices = list(range(self.data.shape[0]))
+        if desired_slices is None:
+            self.slices_present = list(range(shape0))
+        else:
+            self.slices_present = desired_slices
         
-        self.data_shape = self.data.shape
+        self.data_shape = (shape0, self.data.shape[1], self.data.shape[2])
         self.loaded_state = 'memory'
         self.check_constraints()
 
@@ -299,22 +303,27 @@ class DataExtra(Data):
         files.sort()        
         def load_image(f):
             return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
-        imgs = list(loading_executor.map(load_image, files))            
-        
-        self.data =np.full(self.data_shape, 0)
-        n_done = 0
-        for file_name, img in zip(files, imgs):
-            index = int(file_name[-8:-4])
-            if (desired_slices is None) or (index in desired_slices):                
-                self.data[index,:,:] = img
-                self.allowed_slices.append(index)
-            n_done += 1
-        if not desired_slices is None:
+        imgs = list(loading_executor.map(load_image, files))  
+
+        if desired_slices is None:
+            self.data = np.stack(imgs)     
+            self.slices_present = []
+            for file_name in files:
+                ind = int(file_name[-8:-4])
+                self.slices_present.append(ind)
+        else:
+            self.data = np.zeros((len(desired_slices), self.data_shape[1], self.data_shape[2]))
+            n_done = 0
+            for file_name, img in zip(files, imgs):
+                ind = int(file_name[-8:-4])
+                if (ind in desired_slices):                
+                    ind_internal = desired_slices.index(ind)
+                    self.data[ind_internal,:,:] = img
+                    n_done += 1
+           
             assert n_done == len(desired_slices)
-            self.data = self.data[desired_slices,:,:]
-            self.allowed_slices = list(range(self.data.shape[0]))
+            self.slices_present = desired_slices
         
-        self.data_shape = self.data.shape
         self.loaded_state = 'memory'
         self.check_constraints()
 
