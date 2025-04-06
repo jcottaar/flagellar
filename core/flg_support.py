@@ -224,9 +224,10 @@ def profile_each_line(func, *args, **kwargs):
 def profile_print(string):
     if profiling: print(string)
 
-def download_kaggle_dataset(dataset_name, destination):
+def download_kaggle_dataset(dataset_name, destination, skip_download=False):
     remove_and_make_dir(destination)
-    subprocess.run('kaggle datasets download ' + dataset_name + ' --unzip -p ' + destination, shell=True)
+    if not skip_download:
+        subprocess.run('kaggle datasets download ' + dataset_name + ' --unzip -p ' + destination, shell=True)
     subprocess.run('kaggle datasets metadata -p ' + destination + ' ' + dataset_name, shell=True)
 
 def upload_kaggle_dataset(source):
@@ -432,6 +433,28 @@ def train_parallel(model, train_data, validation_data):
     return model
 
 @dataclass
+class DataSelector(BaseClass):
+    datasets: list = field(init=False, default_factory = lambda:['tom', 'ycw', 'aba', 'mba'])
+    include_multi_motor: bool = field(init=False, default=True)
+
+    def select(self,data):        
+        if not self.include_multi_motor:
+            data_out = []
+            for d in data:
+                if len(d.labels)<=1:
+                    data_out.append(d)
+            data = data_out
+        print(len(data))
+
+        data_out = []
+        for d in data:
+            if d.name[:3] in self.datasets:
+                data_out.append(d)
+        data = data_out
+        print(len(data))
+        return data
+
+@dataclass
 class Model(BaseClass):
     # Loads one or more cryoET measuerements
     state: int = field(init=False, default=0) # 0: untrained, 1: trained
@@ -439,6 +462,7 @@ class Model(BaseClass):
     run_in_parallel: bool = field(init=False, default=True) 
     seed: object = field(init=True, default=None)
 
+    train_data_selector: object = field(init=True, default_factory = DataSelector)
     preprocessor: object = field(init=True, default = None)
 
     def __post_init__(self):
@@ -465,6 +489,8 @@ class Model(BaseClass):
             self.seed = np.random.default_rng(seed=None).integers(0,1e6).item()
         train_data = copy.deepcopy(train_data)
         validation_data = copy.deepcopy(validation_data)
+        train_data = self.train_data_selector.select(train_data)
+        validation_data = self.train_data_selector.select(validation_data)
         for d in train_data:
             d.unload()
         for d in validation_data:

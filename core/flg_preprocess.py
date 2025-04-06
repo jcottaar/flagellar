@@ -43,7 +43,16 @@ class Preprocessor(fls.BaseClass):
         data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
 
         fls.claim_gpu('cupy')
-        img = cp.array(data.data).astype(cp.float16)
+        while True:
+            try:
+                img = cp.array(data.data).astype(cp.float16)
+                break
+            except:
+                fls.claim_gpu('')
+                time.sleep(1)
+                fls.claim_gpu('cupy')
+                print('failed cupy')
+                pass
 
         # Resize
         if self.resize:
