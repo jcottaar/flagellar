@@ -271,7 +271,7 @@ class Data(BaseClass):
 
 class DataKaggle(Data):
 
-    @profile_each_line
+    #@profile_each_line
     def load_to_memory(self, desired_slices = None, pad_to_original_size = False):  
     
         if self.loaded_state == 'memory': return
@@ -306,7 +306,7 @@ class DataKaggle(Data):
 
 class DataExtra(Data):
 
-    @profile_each_line
+    #@profile_each_line
     def load_to_memory(self, desired_slices = None, pad_to_original_size = False):  
     
         if self.loaded_state == 'memory': return

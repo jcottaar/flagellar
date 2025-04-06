@@ -298,7 +298,7 @@ class YOLOModel(fls.Model):
             
             plot_path = os.path.join(run_dir, 'dfl_loss_curve.png')
             plt.savefig(plot_path)
-            plt.savefig(os.path.join('/kaggle/working', 'dfl_loss_curve.png'))
+            #plt.savefig(os.path.join('/kaggle/working', 'dfl_loss_curve.png'))
             
             print(f"Loss curve saved to {plot_path}")
             plt.close()

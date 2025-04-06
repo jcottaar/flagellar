@@ -48,8 +48,8 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['confidence_threshold'] = pm(0.45, lambda r:r.uniform(0.35,0.55), setattr)
     if fast_mode:
         res.label = 'Baseline fast mode'
-        res.train_part = slice(0,3)
-        res.test_part = slice(0,3)
+        res.train_part = slice(0,10)
+        res.test_part = slice(0,5)
         res.base_model.n_epochs = 2
         del res.modifier_dict['n_epochs']
     return res
