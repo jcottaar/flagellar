@@ -20,13 +20,14 @@ import h5py
 
 def baseline_runner(fast_mode = False):
     res = ModelRunner()
-    res.label = 'Baseline no extra'
+    res.label = 'Baseline no extra'; res.N_test_positive = 100;
     res.base_model = flg_yolo.YOLOModel()
     res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(1.,5.), prep)
     res.modifier_dict['img_size'] = pm(640, lambda r:(320+64*r.integers(0,6)).item(), setattr)
-    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,100)).item(), setattr)
+    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,100)).item(), setattr)    
     model_list = ['yolov8m', 'yolov8l', 'yolo11m']
     res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], setattr)
+    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, setattr)
     res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(16,32).item(), setattr)
     res.modifier_dict['trust'] = pm(4, lambda r:r.integers(0,6).item(), setattr)
     res.modifier_dict['fix_norm_bug'] = pm(False, lambda r:r.uniform()>0.5, setattr)
@@ -83,7 +84,6 @@ class ModelRunner(fls.BaseClass):
         inds_one = np.argwhere(n_motors==1)[:self.N_test_positive,0]
         inds_test = np.concatenate((inds_zero,inds_one))
         inds_train = np.setdiff1d(np.arange(len(n_motors)), inds_test)
-        print(inds_test.shape, inds_train.shape)
         
         train_data = []
         for i in inds_train:
@@ -93,9 +93,10 @@ class ModelRunner(fls.BaseClass):
             test_data.append(all_data[i])
         np.random.default_rng(seed=0).shuffle(test_data)
         test_data = test_data
-        len(train_data), len(test_data)
+        print(len(train_data), len(test_data))
         self.train_data = train_data[self.train_part]
         self.test_data = test_data[self.test_part]
+        print(len(self.train_data), len(self.test_data))
 
         # Set up modified model
         model = copy.deepcopy(self.base_model)
