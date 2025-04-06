@@ -181,16 +181,7 @@ class YOLOModel(fls.Model):
             }
 
         # Set random seeds for reproducibility
-        fls.prep_pytorch(self.seed, True, True)
-        # print(self.seed)
-        # random.seed(self.seed)
-        # np.random.seed(self.seed)
-        # torch.manual_seed(self.seed)
-        # if torch.cuda.is_available():
-        #     torch.cuda.manual_seed(self.seed)
-        #     torch.backends.cudnn.deterministic = True
-        #     torch.backends.cudnn.benchmark = False
-        #     torch.use_deterministic_algorithms(True, warn_only=False)
+        fls.prep_pytorch(self.seed, True, False)
         
         # Run the preprocessing
         summary = prepare_yolo_dataset(TRUST)
@@ -420,10 +411,7 @@ class YOLOModel(fls.Model):
             print(f"Processing {len(slice_files)} out of {len(os.listdir(tomo_dir))} slices (CONCENTRATION={CONCENTRATION})")
             all_detections = []
             
-            if device.startswith('cuda'):
-                streams = [torch.cuda.Stream() for _ in range(min(4, BATCH_SIZE))]
-            else:
-                streams = [None]
+            streams = [torch.cuda.Stream() for _ in range(min(4, BATCH_SIZE))]
             
             for batch_start in range(0, len(slice_files), BATCH_SIZE):
                 batch_end = min(batch_start + BATCH_SIZE, len(slice_files))
@@ -434,12 +422,11 @@ class YOLOModel(fls.Model):
                     if len(sub_batch) == 0:
                         continue
                     stream = streams[i % len(streams)]
-                    with torch.cuda.stream(stream) if stream and device.startswith('cuda') else nullcontext():
+                    with torch.cuda.stream(stream):
                         sub_batch_paths = [os.path.join(tomo_dir, slice_file) for slice_file in sub_batch]
-                        sub_batch_slice_nums = [int(slice_file.split('_')[1].split('.')[0]) for slice_file in sub_batch]
-                        with GPUProfiler(f"Inference batch {i+1}/{len(sub_batches)}"):
-                            with torch.amp.autocast('cuda') and torch.no_grad():
-                                sub_results = model(sub_batch_paths, verbose=False)
+                        sub_batch_slice_nums = [int(slice_file.split('_')[1].split('.')[0]) for slice_file in sub_batch]                       
+                        with torch.amp.autocast('cuda'), torch.no_grad():
+                            sub_results = model(sub_batch_paths, verbose=False)
                         for j, result in enumerate(sub_results):
                             if len(result.boxes) > 0:
                                 for box_idx, confidence in enumerate(result.boxes.conf):
@@ -453,8 +440,7 @@ class YOLOModel(fls.Model):
                                             'x': round(x_center),
                                             'confidence': float(confidence)
                                         })
-                if device.startswith('cuda'):
-                    torch.cuda.synchronize()
+                torch.cuda.synchronize()
 
             final_detections = perform_3d_nms(all_detections, NMS_IOU_THRESHOLD)
             final_detections.sort(key=lambda x: x['confidence'], reverse=True)
@@ -485,92 +471,32 @@ class YOLOModel(fls.Model):
             cv2.imwrite(img_dir + f"slice_{ii:04d}.jpg", data.data[ii,:,:])
 
         
-        fls.claim_gpu('pytorch')
-
-        
-            
-            
+                    
         CONFIDENCE_THRESHOLD = 0.45
         NMS_IOU_THRESHOLD = 0.2
         CONCENTRATION = 1  # Process a fraction of slices for fast submission
-        
-        # GPU profiling context manager for timing
-        class GPUProfiler:
-            def __init__(self, name):
-                self.name = name
-                self.start_time = None
-                
-            def __enter__(self):
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
-                self.start_time = time.time()
-                return self
-                
-            def __exit__(self, *args):
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
-                elapsed = time.time() - self.start_time
-                #print(f"[PROFILE] {self.name}: {elapsed:.3f}s")
-        
-        # Set device and dynamic batch size
-        device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-        BATCH_SIZE = 8
-        if device.startswith('cuda'):
-            torch.backends.cudnn.benchmark = True
-            torch.backends.cudnn.deterministic = True
-            #raise 'stop'
-            torch.use_deterministic_algorithms(True, warn_only=False)            
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
-            gpu_name = torch.cuda.get_device_name(0)
-            gpu_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
-            #print(f"Using GPU: {gpu_name} with {gpu_mem:.2f} GB memory")
-            free_mem = gpu_mem - torch.cuda.memory_allocated(0) / 1e9
-            BATCH_SIZE = max(8, min(32, int(free_mem * 4)))
-            #print(f"Dynamic batch size set to {BATCH_SIZE} based on {free_mem:.2f}GB free memory")
-        else:
-            print("GPU not available, using CPU")
-            BATCH_SIZE = 4
-
+        cpu, device = fls.prep_pytorch(self.seed, True, False)
+        BATCH_SIZE = 32
         
         self.trained_model.to(device)
-        if device.startswith('cuda'):
-            self.trained_model.fuse()
+        self.trained_model.fuse()
 
         results = []
         motors_found = 0
 
-        if data.is_train:
-            test_tomos = [fls.data_dir + '/train/' + data.name]
+        result = process_tomogram(data.name, self.trained_model, 1, 1)
+        has_motor = not pd.isna(result['Motor axis 0'])
+        if has_motor:
+            motors_found += 1
+            print(f"Motor found in {data.name} at position: z={result['Motor axis 0']}, y={result['Motor axis 1']}, x={result['Motor axis 2']}")
+            if not result['Motor axis 0']==-1:
+                d = {'z': [result['Motor axis 0']], 'y': [result['Motor axis 1']], 'x': [result['Motor axis 2']]}
+                data.labels = pd.DataFrame(d)                    
+            else:
+                data.labels = data.labels[0:0]
         else:
-            test_tomos = [fls.data_dir + '/test/' + data.name]
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future_to_tomo = {}
-            for i, tomo_id in enumerate(test_tomos, 1):
-                future = executor.submit(process_tomogram, tomo_id, self.trained_model, i, 1)
-                future_to_tomo[future] = tomo_id
-            
-            for future in future_to_tomo:
-                tomo_id = future_to_tomo[future]
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                result = future.result()
-                print(result)
-                results.append(result)
-                has_motor = not pd.isna(result['Motor axis 0'])
-                if has_motor:
-                    motors_found += 1
-                    print(f"Motor found in {tomo_id} at position: z={result['Motor axis 0']}, y={result['Motor axis 1']}, x={result['Motor axis 2']}")
-                    if not result['Motor axis 0']==-1:
-                        d = {'z': [result['Motor axis 0']], 'y': [result['Motor axis 1']], 'x': [result['Motor axis 2']]}
-                        data.labels = pd.DataFrame(d)                    
-                    else:
-                        data.labels = data.labels[0:0]
-                else:
-                    print(f"No motor detected in {tomo_id}")
-                    data.labels = data.labels[0:0]
-                #print(f"Current detection rate: {motors_found}/{len(results)} ({motors_found/len(results)*100:.1f}%)")
+            print(f"No motor detected in {tomo_id}")
+            data.labels = data.labels[0:0]
 
         return data
                 
