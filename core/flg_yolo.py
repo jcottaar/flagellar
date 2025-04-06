@@ -40,11 +40,22 @@ class YOLOModel(fls.Model):
     img_size = 640
     n_epochs = 30
     model_name = 'yolov8m'
-    use_pretrained_weights = True
-    use_albumentations = False
+    use_pretrained_weights = True    
     fix_norm_bug = False
     box_size = 24
     trust = 4
+
+    patience=10
+    lr0=0.001
+    lrf=0.01
+    cos_lr = True
+    weight_decay = 0.0005
+    dropout= 0.0
+    momentum=0.937
+
+    box=7.5
+    
+    
     
     hsv_h = 0.015
     hsv_s = 0.7
@@ -52,10 +63,20 @@ class YOLOModel(fls.Model):
     translate = 0.1
     scale = 0.5
     fliplr = 0.5
+    flipud = 0.0
+    degrees = 0.0    
+    shear = 0.0
+    perspective = 0.0
     mosaic = 1.0
+    close_mosaic = 10
     mixup = 0.2
     auto_augment = 'randaugment'
     erasing = 0.4
+    copy_paste = 0.0
+    crop_fraction = 1.0
+    use_albumentations = False
+
+
 
     # infer
     confidence_threshold = 0.45
@@ -320,22 +341,24 @@ class YOLOModel(fls.Model):
                 project=yolo_weights_dir,
                 name='motor_detector',
                 exist_ok=True,
-                patience=10,  # Stop training if no improvement after 10 epochs
+                patience=self.patience,  # Stop training if no improvement after 10 epochs
                 save_period=5,  # Save model every 5 epochs
                 val=True,
                 verbose=True,
                 optimizer="AdamW",  # AdamW optimizer for stability
-                lr0=0.001,  # Initial learning rate
-                lrf=0.01,  # Final learning rate factor
-                cos_lr=True,  # Use cosine learning rate decay
-                weight_decay=0.0005,  # Prevent overfitting
-                momentum=0.937,  # Momentum for better gradient updates
-                close_mosaic=10,  # Disable mosaic augmentation after 10 epochs
+                lr0=self.lr0,  # Initial learning rate
+                lrf=self.lrf,  # Final learning rate factor
+                cos_lr=self.cos_lr,  # Use cosine learning rate decay
+                weight_decay=self.weight_decay,  # Prevent overfitting
+                dropout= self.dropout,
+                momentum=self.momentum,  # Momentum for better gradient updates
+                close_mosaic=self.close_mosaic,  # Disable mosaic augmentation after 10 epochs
+                box = self.box,
                 workers=4,  # Speed up data loading
                 augment=True,  # Enable additional augmentations
                 amp=True,  # Mixed precision training for faster performance
                 seed=self.seed,
-                hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=0.0, translate=self.translate, scale=self.scale, shear=0.0, perspective=0.0, flipud=0.0, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=0.0, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=1.0,
+                hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=self.degrees, translate=self.translate, scale=self.scale, shear=self.shear, perspective=self.perspective, flipud=self.flipud, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=self.copy_paste, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=self.crop_fraction,
             )
         
         
