@@ -63,9 +63,6 @@ class YOLOModel(fls.Model):
     def _train(self,train_data,validation_data):
 
         # Preprocess data
-        # Define YOLO dataset structure and parameters
-        data_path = fls.data_dir
-        train_dir = os.path.join(data_path, "train")
         
         # Output directories for YOLO dataset (adjust as needed)
         yolo_dataset_dir = fls.temp_dir + '/yolo_dataset/'
@@ -184,15 +181,16 @@ class YOLOModel(fls.Model):
             }
 
         # Set random seeds for reproducibility
-        print(self.seed)
-        random.seed(self.seed)
-        np.random.seed(self.seed)
-        torch.manual_seed(self.seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed(self.seed)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-            torch.use_deterministic_algorithms(True, warn_only=False)
+        fls.prep_pytorch(self.seed, True, True)
+        # print(self.seed)
+        # random.seed(self.seed)
+        # np.random.seed(self.seed)
+        # torch.manual_seed(self.seed)
+        # if torch.cuda.is_available():
+        #     torch.cuda.manual_seed(self.seed)
+        #     torch.backends.cudnn.deterministic = True
+        #     torch.backends.cudnn.benchmark = False
+        #     torch.use_deterministic_algorithms(True, warn_only=False)
         
         # Run the preprocessing
         summary = prepare_yolo_dataset(TRUST)
@@ -202,24 +200,11 @@ class YOLOModel(fls.Model):
         print(f"- Dataset directory: {summary['dataset_dir']}")
         print(f"- YAML configuration: {summary['yaml_path']}")
         print("\nReady for YOLO training!")
-
-        #fls.claim_gpu('pytorch')
         
         # # Define paths for the Kaggle environment
         yolo_weights_dir = fls.temp_dir + '/yolo_weights/'
         yolo_pretrained_weights = fls.model_dir +"/yolov8m.pt"  # Pre-downloaded weights
         
-        # Create a directory to store the weights
-        #os.makedirs(yolo_weights_dir, exist_ok=True)
-        
-        # This will download the YOLOv8 nano weights
-        #model = YOLO("yolov8m.pt")
-        
-        # Save the downloaded weights to a local file
-        #model.save(yolo_weights_dir + "yolov8m.pt")
-
-        #model = YOLO(fls.model_dir + 'yolov8m.pt')
-
         def fix_yaml_paths(yaml_path):
             """
             Fix the paths in the YAML file to match the actual Kaggle directories.
@@ -230,6 +215,7 @@ class YOLOModel(fls.Model):
             Returns:
                 str: Path to the fixed YAML file.
             """
+
             print(f"Fixing YAML paths in {yaml_path}")
             with open(yaml_path, 'r') as f:
                 yaml_data = yaml.safe_load(f)
@@ -347,50 +333,27 @@ class YOLOModel(fls.Model):
             run_dir = os.path.join(yolo_weights_dir, 'motor_detector')
             
             # If function is defined, plot loss curves for better insights
-            if 'plot_dfl_loss_curve' in globals():
-                best_epoch_info = plot_dfl_loss_curve(run_dir)
-                if best_epoch_info:
-                    best_epoch, best_val_loss = best_epoch_info
-                    print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
+            best_epoch_info = plot_dfl_loss_curve(run_dir)
+            if best_epoch_info:
+                best_epoch, best_val_loss = best_epoch_info
+                print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
         
             return model, results
         
         def prepare_dataset():
-            """
-            Check if the dataset exists and create/fix a proper YAML file for training.
-            
-            Returns:
-                str: Path to the YAML file to use for training.
-            """
-            train_images_dir = os.path.join(yolo_dataset_dir, 'images', 'train')
-            val_images_dir = os.path.join(yolo_dataset_dir, 'images', 'val')
-            train_labels_dir = os.path.join(yolo_dataset_dir, 'labels', 'train')
-            val_labels_dir = os.path.join(yolo_dataset_dir, 'labels', 'val')
-            
-            print(f"Directory status:")
-            print(f"- Train images exists: {os.path.exists(train_images_dir)}")
-            print(f"- Val images exists: {os.path.exists(val_images_dir)}")
-            print(f"- Train labels exists: {os.path.exists(train_labels_dir)}")
-            print(f"- Val labels exists: {os.path.exists(val_labels_dir)}")
-            
-            original_yaml_path = os.path.join(yolo_dataset_dir, 'dataset.yaml')
-            if os.path.exists(original_yaml_path):
-                print(f"Found original dataset.yaml at {original_yaml_path}")
-                return fix_yaml_paths(original_yaml_path)
-            else:
-                print("Original dataset.yaml not found, creating a new one")
-                yaml_data = {
-                    'path': yolo_dataset_dir,
-                    'train': 'images/train',
-                    'val': 'images/train' if not os.path.exists(val_images_dir) else 'images/val',
-                    'names': {0: 'motor'}
-                }
-                new_yaml_path = "/kaggle/working/dataset.yaml"
-                with open(new_yaml_path, 'w') as f:
-                    yaml.dump(yaml_data, f)
-                print(f"Created new YAML at {new_yaml_path}")
-                return new_yaml_path
-        
+             
+            yaml_data = {
+                'path': yolo_dataset_dir,
+                'train': 'images/train',
+                'val': 'images/val',
+                'names': {0: 'motor'}
+            }
+            new_yaml_path = fls.temp_dir + 'training.yaml'
+            with open(new_yaml_path, 'w') as f:
+                yaml.dump(yaml_data, f)
+            print(f"Created new YAML at {new_yaml_path}")
+            return new_yaml_path
+    
         print("Starting YOLO training process...")
         yaml_path = prepare_dataset()
         print(f"Using YAML file: {yaml_path}")
@@ -498,7 +461,8 @@ class YOLOModel(fls.Model):
             
             if not final_detections:
                 return {'tomo_id': tomo_id, 'Motor axis 0': -1, 'Motor axis 1': -1, 'Motor axis 2': -1}
-            
+
+            print(final_detections)
             best_detection = final_detections[0]
             return {
                 'tomo_id': tomo_id,
@@ -527,7 +491,6 @@ class YOLOModel(fls.Model):
             
             
         CONFIDENCE_THRESHOLD = 0.45
-        MAX_DETECTIONS_PER_TOMO = 3
         NMS_IOU_THRESHOLD = 0.2
         CONCENTRATION = 1  # Process a fraction of slices for fast submission
         
