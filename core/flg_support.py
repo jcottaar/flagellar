@@ -32,6 +32,7 @@ import time
 import sklearn
 import skimage
 import shutil
+import subprocess
 
 
 '''
@@ -59,6 +60,7 @@ match env:
         temp_dir = 'd:/flagellar/temp/'     
         h5py_cache_dir = 'd:/flagellar/cache2/'
         model_dir = 'd:/flagellar/models/'
+        result_dir = 'd:/flagellar/results/'
         code_dir = 'd:/flagellar/code/core/'
         output_dir = temp_dir
         loader_threads = 32
@@ -66,7 +68,7 @@ match env:
         data_dir = '/kaggle/input/byu-locating-bacterial-flagellar-motors-2025/'
         temp_dir = '/kaggle/working/temp/'
         h5py_cache_dir = '/kaggle/temp/cache2/'
-        model_dir = '/kaggle/input/my-flg-models/'
+        model_dir = '/kaggle/input/my-flg-models/'        
         output_dir = '/kaggle/working/'
         code_dir = '/flagellar/input/my-flg-library/'
         loader_threads = 8
@@ -76,11 +78,13 @@ match env:
         h5py_cache_dir = '/flagellar/cache2/'
         model_dir = '/flagellar/models/'
         code_dir = '/flagellar/code/core/'
+        result_dir = '/flagellar/results/'
         output_dir = temp_dir
         loader_threads = 32
 os.makedirs(temp_dir, exist_ok=True)
 os.makedirs(h5py_cache_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
+os.makedirs(result_dir, exist_ok=True)
 profiling = False
 if is_submission:
     profiling = False
@@ -220,6 +224,16 @@ def profile_each_line(func, *args, **kwargs):
 def profile_print(string):
     if profiling: print(string)
 
+def download_kaggle_dataset(dataset_name, destination):
+    remove_and_make_dir(destination)
+    subprocess.run('kaggle datasets download ' + dataset_name + ' --unzip -p ' + destination, shell=True)
+    subprocess.run('kaggle datasets metadata -p ' + destination + ' ' + dataset_name, shell=True)
+
+def upload_kaggle_dataset(source):
+    if env=='local':
+        source=source.replace('/', '\\')
+    subprocess.run('kaggle datasets version -p ' + source + ' -m ''Update''', shell=True)
+
 '''
 Data definition and loading
 '''
@@ -251,6 +265,7 @@ class Data(BaseClass):
 
     def unload(self):
         self.data = None        
+        self.slices_present = []
         self.loaded_state = 'unloaded'
         self.check_constraints()    
 
@@ -409,12 +424,19 @@ def infer_internal_single_parallel(data):
         print(traceback.format_exc())     
         raise
 
+def train_parallel(model, train_data, validation_data):
+    old_run_in_parallel = model.run_in_parallel
+    model.run_in_parallel = False
+    model.train(train_data, validation_data)
+    model.run_in_parallel = old_run_in_parallel
+    return model
+
 @dataclass
 class Model(BaseClass):
     # Loads one or more cryoET measuerements
     state: int = field(init=False, default=0) # 0: untrained, 1: trained
     quiet: bool = field(init=False, default=True)
-    run_in_parallel: bool = field(init=False, default=True)    
+    run_in_parallel: bool = field(init=False, default=True) 
     seed: object = field(init=True, default=None)
 
     preprocessor: object = field(init=True, default = None)
@@ -427,6 +449,14 @@ class Model(BaseClass):
 
     def _check_constraints(self):
         assert(self.state>=0 and self.state<=1)
+
+    def train_subprocess(self, train_data, validation_data):
+        # Note: unlike below must capture result!
+        claim_gpu('')
+        with multiprocess.Pool(1) as p:
+            trained_model = p.starmap(train_parallel, zip([self], [train_data], [validation_data]))[0]
+        trained_model.check_constraints()
+        return trained_model
 
     def train(self, train_data, validation_data):
         if self.state>1:

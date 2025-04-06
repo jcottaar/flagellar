@@ -59,7 +59,7 @@ def test_unet_alt(update_reference=False):
     model.preprocessor.resize_target= 320
     model.preprocessor.scale_std = False
     model.seed = 41
-    model.train(train_data[1:3], train_data[4:5])
+    model = model.train_subprocess(train_data[1:3], train_data[4:5])
     d = fls.load_all_test_data()[1]
     heatmap = model.step1Heatmap.infer(d)
     plt.figure()
