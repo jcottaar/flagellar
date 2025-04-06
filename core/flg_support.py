@@ -240,6 +240,7 @@ class Data(BaseClass):
     voxel_spacing: float = field(init=True, default=np.nan) # in Angstrom    
 
     resize_factor: float = field(init=True, default=np.nan)
+    allowed_slices: list = field(init=True, default_factory=list)
 
     def _check_constraints(self):
         if not self.loaded_state == 'unloaded':
@@ -256,7 +257,7 @@ class Data(BaseClass):
 class DataKaggle(Data):
 
     @profile_each_line
-    def load_to_memory(self, desired_slices = slice(None,None,None), pad_to_original_size = False):  
+    def load_to_memory(self, desired_slices = None, pad_to_original_size = False):  
     
         if self.loaded_state == 'memory': return
         
@@ -268,11 +269,17 @@ class DataKaggle(Data):
         else:
             files = glob.glob(data_dir + 'test/' + self.name + '/*.jpg')
         files.sort()
-        files = files[desired_slices]
+        if not desired_slices is None:
+            files_new = []
+            for i in desired_slices:
+                files_new.append(files[i])
+            files = files_new
         def load_image(f):
             return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
         imgs = list(loading_executor.map(load_image, files))            
-        self.data = np.stack(imgs)            
+        self.data = np.stack(imgs)       
+
+        self.allowed_slices = list(range(self.data.shape[0]))
         
         self.data_shape = self.data.shape
         self.loaded_state = 'memory'
@@ -280,19 +287,33 @@ class DataKaggle(Data):
 
 class DataExtra(Data):
 
-    def load_to_memory(self, desired_slices = slice(None,None,None), pad_to_original_size = False):  
+    @profile_each_line
+    def load_to_memory(self, desired_slices = None, pad_to_original_size = False):  
+    
         if self.loaded_state == 'memory': return
 
-        assert not pad_to_original_size
-
-        filename_base = data_dir + '/extra/' + self.name
-
-        #data_pickle = dill_load(filename_base + '.pickle')
-        # not used right now
-
-        with h5py.File(filename_base + '.h5') as f:
-            self.data = f['data'][desired_slices,...]
-
+        global loading_executor
+        if loading_executor is None:
+            loading_executor = concurrent.futures.ThreadPoolExecutor(max_workers=loader_threads)
+        files = glob.glob(data_dir + 'extra/' + self.name + '/*.jpg')            
+        files.sort()        
+        def load_image(f):
+            return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
+        imgs = list(loading_executor.map(load_image, files))            
+        
+        self.data =np.full(self.data_shape, 0)
+        n_done = 0
+        for file_name, img in zip(files, imgs):
+            index = int(file_name[-8:-4])
+            if (desired_slices is None) or (index in desired_slices):                
+                self.data[index,:,:] = img
+                self.allowed_slices.append(index)
+            n_done += 1
+        if not desired_slices is None:
+            assert n_done == len(desired_slices)
+            self.data = self.data[desired_slices,:,:]
+            self.allowed_slices = list(range(self.data.shape[0]))
+        
         self.data_shape = self.data.shape
         self.loaded_state = 'memory'
         self.check_constraints()
@@ -321,14 +342,10 @@ def load_one_measurement_extra(name, include_train_labels):
     result.name = name
     result.is_train = True        
     if include_train_labels:
-        data_pickle = dill_load(data_dir + '/extra/' + name + '.pickle')
+        data_pickle = dill_load(data_dir + '/extra/' + name + '/info.pickle')
         result.voxel_spacing = data_pickle['voxel_spacing']
-        d=dict()
-        d['tomo_id'] = name
-        d['z'] = data_pickle['inds'][0]
-        d['y'] = data_pickle['inds'][1]
-        d['x'] = data_pickle['inds'][2]
-        result.labels = pd.DataFrame([d])
+        result.labels = data_pickle['labels']
+        result.data_shape = data_pickle['orig_size']
     result.check_constraints()    
     return result
 
@@ -356,16 +373,13 @@ def load_all_test_data():
         result.append(load_one_measurement(name, False, False))
     return result
 
-def load_all_extra_data(for_yolo=False):
-    files = glob.glob(data_dir + 'extra/*.h5')
+def load_all_extra_data():
+    files = glob.glob(data_dir + 'extra/*')
     files.sort()
     result = []
     for f in files:
-        name = f[max(f.rfind('\\'), f.rfind('/'))+1:-3]
-        if for_yolo:
-            result.append(load_one_measurement_extra_for_yolo(name, True))
-        else:
-            result.append(load_one_measurement_extra(name, True))
+        name = f[max(f.rfind('\\'), f.rfind('/'))+1:]
+        result.append(load_one_measurement_extra(name, True))
     return result
     
 '''

@@ -70,7 +70,7 @@ class YOLOModel(fls.Model):
     mosaic = 1.0
     close_mosaic = 10
     mixup = 0.2
-    auto_augment = 'randaugment'
+    auto_augment = None
     erasing = 0.4
     copy_paste = 0.0
     crop_fraction = 1.0
@@ -172,7 +172,7 @@ class YOLOModel(fls.Model):
                 for d, z_center, y_center, x_center, z_max in tqdm(motor_counts, desc=f"Processing {set_name} motors"):
                     z_min = max(0, z_center - trust)
                     z_max_bound = min(z_max - 1, z_center + trust)
-                    self.preprocessor.load_and_preprocess(d, desired_original_slices = slice(z_min,z_max_bound+1))
+                    self.preprocessor.load_and_preprocess(d, desired_original_slices = np.arange(z_min,z_max_bound+1))
                     for z in range(z_min, z_max_bound + 1):
                         normalized_img = d.data[z-z_min,:,:]                                   
                         dest_filename = f"{d.name}_z{z:04d}_y{y_center:04d}_x{x_center:04d}.jpg"
