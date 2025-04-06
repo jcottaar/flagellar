@@ -3,7 +3,6 @@ from PIL import Image, ImageDraw
 import random
 import seaborn as sns
 from matplotlib.patches import Rectangle
-from ultralytics import YOLO
 import yaml
 import json
 import os
@@ -29,14 +28,23 @@ import flg_support as fls
 import shutil
 from dataclasses import dataclass, field, fields
 import copy
+import subprocess
+import importlib
 
+
+ran_with_albs = False
 
 @dataclass
 class YOLOModel(fls.Model):
     #Input
+    img_size = 640
     n_epochs = 30
+    model_name = 'yolov8m'
     use_pretrained_weights = True
+    use_albumentations = False
     fix_norm_bug = False
+    box_size = 24
+    trust = 4
     
     hsv_h = 0.015
     hsv_s = 0.7
@@ -48,6 +56,9 @@ class YOLOModel(fls.Model):
     mixup = 0.2
     auto_augment = 'randaugment'
     erasing = 0.4
+
+    # infer
+    confidence_threshold = 0.45
     
     trained_model = 0
     
@@ -61,6 +72,18 @@ class YOLOModel(fls.Model):
     
    
     def _train(self,train_data,validation_data):
+
+
+        global ran_with_albs
+        if self.use_albumentations:
+            ran_with_albs = True
+            if not fls.env=='kaggle':
+                print(subprocess.run(["pip", "install", "albumentations"]))
+        else:
+            assert not ran_with_albs
+            print(subprocess.run(["pip", "uninstall", "-y",  "albumentations"]))
+        import ultralytics
+        importlib.reload(ultralytics)
 
         # Preprocess data
         
@@ -77,12 +100,8 @@ class YOLOModel(fls.Model):
             except: pass
             os.makedirs(dir_path, exist_ok=True)
         
-        # Define constants for processing
-        TRUST = 4       # Number of slices above and below center slice (total slices = 2*TRUST + 1)
-        BOX_SIZE = 24   # Bounding box size (in pixels)
-        
         # Define the preprocessing function to extract slices, normalize, and generate YOLO annotations.
-        def prepare_yolo_dataset(trust=TRUST):
+        def prepare_yolo_dataset(trust):
             """
             Extract slices containing motors and save images with corresponding YOLO annotations.
             
@@ -143,8 +162,8 @@ class YOLOModel(fls.Model):
                         img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                         x_center_norm = x_center / img_width
                         y_center_norm = y_center / img_height
-                        box_width_norm = BOX_SIZE / img_width
-                        box_height_norm = BOX_SIZE / img_height
+                        box_width_norm = self.box_size / img_width
+                        box_height_norm = self.box_size / img_height
                         label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
                         with open(label_path, 'w') as f:
                             f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
@@ -184,7 +203,7 @@ class YOLOModel(fls.Model):
         fls.prep_pytorch(self.seed, True, False)
         
         # Run the preprocessing
-        summary = prepare_yolo_dataset(TRUST)
+        summary = prepare_yolo_dataset(self.trust)
         print(f"\nPreprocessing Complete:")
         print(f"- Training data: {summary['train_tomograms']} tomograms, {summary['train_motors']} motors, {summary['train_slices']} slices")
         print(f"- Validation data: {summary['val_tomograms']} tomograms, {summary['val_motors']} motors, {summary['val_slices']} slices")
@@ -192,10 +211,7 @@ class YOLOModel(fls.Model):
         print(f"- YAML configuration: {summary['yaml_path']}")
         print("\nReady for YOLO training!")
         
-        # # Define paths for the Kaggle environment
         yolo_weights_dir = fls.temp_dir + '/yolo_weights/'
-        yolo_pretrained_weights = fls.model_dir +"/yolov8m.pt"  # Pre-downloaded weights
-        
         def fix_yaml_paths(yaml_path):
             """
             Fix the paths in the YAML file to match the actual Kaggle directories.
@@ -268,7 +284,7 @@ class YOLOModel(fls.Model):
             
             return best_epoch, best_val_loss
 
-        def train_yolo_model(yaml_path, pretrained_weights_path, epochs=50, batch_size=16, img_size=640):
+        def train_yolo_model(yaml_path, batch_size=16, img_size=640):
             """
             Train a YOLO model on the prepared dataset with optimized accuracy settings.
         
@@ -283,11 +299,13 @@ class YOLOModel(fls.Model):
                 model (YOLO): Trained YOLO model.
                 results: Training results.
             """
-            if self.use_pretrained_weights:
-                print(f"Loading pre-trained weights from: {pretrained_weights_path}")
-                model = YOLO(pretrained_weights_path)
+            if self.use_pretrained_weights:         
+                if not fls.env=='kaggle':
+                    model = ultralytics.YOLO(self.model_name + '.pt')
+                else:
+                    model = ultralytics.YOLO('/kaggle/usr/lib/ultralytics_for_offline_install_mine/' + self.model_name + '.pt')
             else:
-                model = YOLO('yolov8m.yaml')
+                model = ultralytics.YOLO(self.model_name + '.yaml')
 
             from ultralytics import settings
 
@@ -296,9 +314,9 @@ class YOLOModel(fls.Model):
 
             results = model.train(
                 data=yaml_path,
-                epochs=epochs,
+                epochs=self.n_epochs,
                 batch=batch_size,
-                imgsz=img_size,
+                imgsz=self.img_size,
                 project=yolo_weights_dir,
                 name='motor_detector',
                 exist_ok=True,
@@ -354,13 +372,11 @@ class YOLOModel(fls.Model):
         print("\nStarting YOLO training...")
         model, results = train_yolo_model(
             yaml_path,
-            pretrained_weights_path=yolo_pretrained_weights,
-            epochs=self.n_epochs  # For demonstration, using 30 epochs
         )
         
         print("\nTraining complete!")
 
-        self.trained_model = YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt')
+        self.trained_model = ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt')
 
     def _infer_single(self,data):   
             
@@ -430,7 +446,7 @@ class YOLOModel(fls.Model):
                         for j, result in enumerate(sub_results):
                             if len(result.boxes) > 0:
                                 for box_idx, confidence in enumerate(result.boxes.conf):
-                                    if confidence >= CONFIDENCE_THRESHOLD:
+                                    if confidence >= self.confidence_threshold:
                                         x1, y1, x2, y2 = result.boxes.xyxy[box_idx].cpu().numpy()
                                         x_center = (x1 + x2) / 2
                                         y_center = (y1 + y2) / 2
@@ -471,8 +487,6 @@ class YOLOModel(fls.Model):
             cv2.imwrite(img_dir + f"slice_{ii:04d}.jpg", data.data[ii,:,:])
 
         
-                    
-        CONFIDENCE_THRESHOLD = 0.45
         NMS_IOU_THRESHOLD = 0.2
         CONCENTRATION = 1  # Process a fraction of slices for fast submission
         cpu, device = fls.prep_pytorch(self.seed, True, False)
