@@ -70,6 +70,7 @@ match env:
         h5py_cache_dir = '/kaggle/temp/cache2/'
         model_dir = '/kaggle/input/my-flg-models/'        
         output_dir = '/kaggle/working/'
+        result_dir = output_dir
         code_dir = '/flagellar/input/my-flg-library/'
         loader_threads = 8
     case 'vast':
