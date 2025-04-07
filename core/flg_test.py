@@ -34,11 +34,12 @@ def test_unet(update_reference=False):
     plt.colorbar()
     plt.pause(0.01)
 
-    ref_name = fls.code_dir + 'ref_unet.pickle';
-    if update_reference:
-        fls.dill_save(ref_name, np.std(heatmap))
-    else:
-        assert np.std(heatmap) == fls.dill_load(ref_name)
+    if fls.env=='local':
+        ref_name = fls.code_dir + 'ref_unet.pickle';
+        if update_reference:
+            fls.dill_save(ref_name, np.std(heatmap))
+        else:
+            assert np.std(heatmap) == fls.dill_load(ref_name)
 
 def test_unet_alt(update_reference=False):
     train_data = fls.load_all_train_data()
@@ -67,11 +68,12 @@ def test_unet_alt(update_reference=False):
     plt.colorbar()
     plt.pause(0.01)
 
-    ref_name = fls.code_dir + 'ref_unet_alt.pickle';
-    if update_reference:
-        fls.dill_save(ref_name, np.std(heatmap))
-    else:
-        assert np.std(heatmap) == fls.dill_load(ref_name)
+    if fls.env=='local':
+        ref_name = fls.code_dir + 'ref_unet_alt.pickle';
+        if update_reference:
+            fls.dill_save(ref_name, np.std(heatmap))
+        else:
+            assert np.std(heatmap) == fls.dill_load(ref_name)
     
 def test_yolo_infer(update_reference=False):
     train_data = fls.load_all_train_data()
@@ -80,11 +82,12 @@ def test_yolo_infer(update_reference=False):
 
     print(res)
 
-    ref_name = fls.code_dir + 'ref_yolo.pickle';
-    if update_reference:
-        fls.dill_save(ref_name, res)
-    else:
-        assert str(res) == str(fls.dill_load(ref_name))
+    if fls.env=='local':
+        ref_name = fls.code_dir + 'ref_yolo.pickle';
+        if update_reference:
+            fls.dill_save(ref_name, res)
+        else:
+            assert str(res) == str(fls.dill_load(ref_name))
 
 def test_yolo(update_reference=False):
     train_data = fls.load_all_train_data()

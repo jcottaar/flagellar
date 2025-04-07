@@ -437,7 +437,8 @@ class DataSelector(BaseClass):
     datasets: list = field(init=False, default_factory = lambda:['tom', 'ycw', 'aba', 'mba'])
     include_multi_motor: bool = field(init=False, default=True)
 
-    def select(self,data):        
+    def select(self,data):
+        print(len(data))
         if not self.include_multi_motor:
             data_out = []
             for d in data:

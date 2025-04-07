@@ -55,8 +55,10 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['ycw'] = pm(True, lambda r:r.uniform()>0.5, add_dataset)
     if fast_mode:
         res.label = 'Baseline fast mode'
-        res.train_part = slice(0,10)
-        res.test_part = slice(0,10)
+        res.train_part = slice(0,30)
+        res.test_part = slice(0,13)
+        res.N_test_positive = 10
+        res.N_test_negative = 3
         res.base_model.n_epochs = 2
         del res.modifier_dict['n_epochs']
     return res
@@ -95,7 +97,7 @@ class ModelRunner(fls.BaseClass):
             inds_one = np.argwhere(n_motors==1)[:self.N_test_positive,0]
             inds_test = np.concatenate((inds_zero,inds_one))
             inds_train = np.setdiff1d(np.arange(len(n_motors)), inds_test)
-            
+
             train_data = []
             for i in inds_train:
                 train_data.append(all_data[i])
@@ -140,6 +142,7 @@ class ModelRunner(fls.BaseClass):
             print('ERROR!')
             import traceback
             self.exception = traceback.format_exc()
+            print(self.exception)
             
 
 

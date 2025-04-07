@@ -37,7 +37,7 @@ class Preprocessor(fls.BaseClass):
 
     return_uint8 = False
 
-    @fls.profile_each_line
+    #@fls.profile_each_line
     def load_and_preprocess(self, data, desired_original_slices = None):
 
         data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
