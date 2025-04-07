@@ -81,56 +81,66 @@ class ModelRunner(fls.BaseClass):
     trained_model=0
     train_data=0
     test_data=0
-    inferred_test_data=0            
+    inferred_test_data=0     
+    cv_score = np.nan
+    exception = 0
             
     def run(self):
-        # Split train and test data
-        all_data = fls.load_all_train_data() + fls.load_all_extra_data()
-        np.random.default_rng(seed=0).shuffle(all_data)
-        n_motors = np.array([len(d.labels) for d in all_data])
-        inds_zero = np.argwhere(n_motors==0)[:self.N_test_negative,0]
-        inds_one = np.argwhere(n_motors==1)[:self.N_test_positive,0]
-        inds_test = np.concatenate((inds_zero,inds_one))
-        inds_train = np.setdiff1d(np.arange(len(n_motors)), inds_test)
-        
-        train_data = []
-        for i in inds_train:
-            train_data.append(all_data[i])
-        test_data = []
-        for i in inds_test:
-            test_data.append(all_data[i])        
-        print(len(train_data), len(test_data))
-        self.train_data = train_data[self.train_part]
-        self.test_data = test_data[self.test_part]
-        print(len(self.train_data), len(self.test_data))
-        
-        # Set up modified model
-        rng = np.random.default_rng(seed=self.seed)
-        while True:
-            model = copy.deepcopy(self.base_model)
-            self.modifier_values = dict()
-            self.modifier_values['seed'] = self.seed
-            model.seed = self.seed            
-            for key, value in self.modifier_dict.items():  
-                self.modifier_values[key] = value.random_function(rng)
-                value.modifier_function(model, key, self.modifier_values[key])
-            self.untrained_model = copy.deepcopy(model)
-            print(self.modifier_values)
-            if len(model.train_data_selector.datasets)>0:
-                break
-        #return
-
-        # Train model
-        if self.train_in_subprocess:
-            model = model.train_subprocess(self.train_data, self.test_data)
-        else:
-            model.train(self.train_data, self.test_data)
-        self.trained_model = copy.deepcopy(model)
-
-        # Infer
-        if fls.env=='vast':
-            model.run_in_parallel = False
-        self.inferred_test_data = model.infer(self.test_data)             
+        try: 
+            # Split train and test data
+            all_data = fls.load_all_train_data() + fls.load_all_extra_data()
+            np.random.default_rng(seed=0).shuffle(all_data)
+            n_motors = np.array([len(d.labels) for d in all_data])
+            inds_zero = np.argwhere(n_motors==0)[:self.N_test_negative,0]
+            inds_one = np.argwhere(n_motors==1)[:self.N_test_positive,0]
+            inds_test = np.concatenate((inds_zero,inds_one))
+            inds_train = np.setdiff1d(np.arange(len(n_motors)), inds_test)
+            
+            train_data = []
+            for i in inds_train:
+                train_data.append(all_data[i])
+            test_data = []
+            for i in inds_test:
+                test_data.append(all_data[i])        
+            print(len(train_data), len(test_data))
+            self.train_data = train_data[self.train_part]
+            self.test_data = test_data[self.test_part]
+            print(len(self.train_data), len(self.test_data))
+            
+            # Set up modified model
+            rng = np.random.default_rng(seed=self.seed)
+            while True:
+                model = copy.deepcopy(self.base_model)
+                self.modifier_values = dict()
+                self.modifier_values['seed'] = self.seed
+                model.seed = self.seed            
+                for key, value in self.modifier_dict.items():  
+                    self.modifier_values[key] = value.random_function(rng)
+                    value.modifier_function(model, key, self.modifier_values[key])
+                self.untrained_model = copy.deepcopy(model)
+                print(self.modifier_values)
+                if len(model.train_data_selector.datasets)>0:
+                    break
+            #return
+    
+            # Train model
+            if self.train_in_subprocess:
+                model = model.train_subprocess(self.train_data, self.test_data)
+            else:
+                model.train(self.train_data, self.test_data)
+            self.trained_model = copy.deepcopy(model)
+    
+            # Infer
+            if fls.env=='vast':
+                model.run_in_parallel = False
+            self.inferred_test_data = model.infer(self.test_data)       
+            self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
+            
+        except Exception as e:
+            print('ERROR!')
+            import traceback
+            self.exception = traceback.format_exc()
+            
 
 
 def pm(missing_value, random_function, modifier_function):
