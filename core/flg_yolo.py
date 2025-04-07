@@ -440,32 +440,37 @@ class YOLOModel(fls.Model):
             Process a single tomogram and return the most confident motor detection.
             """
             print(f"Processing tomogram {tomo_id} ({index}/{total})")
-            tomo_dir = img_dir
-            slice_files = sorted([f for f in os.listdir(tomo_dir) if f.endswith('.jpg')])
+            #tomo_dir = img_dir
+            #slice_files = sorted([f for f in os.listdir(tomo_dir) if f.endswith('.jpg')])
 
-            selected_indices = np.linspace(0, len(slice_files)-1, int(len(slice_files) * CONCENTRATION))
+            selected_indices = np.linspace(0, data.data.shape[0]-1, int(data.data.shape[0] * CONCENTRATION))
             selected_indices = np.round(selected_indices).astype(int)
-            slice_files = [slice_files[i] for i in selected_indices]
+            #slice_files = [slice_files[i] for i in selected_indices]
             
-            print(f"Processing {len(slice_files)} out of {len(os.listdir(tomo_dir))} slices (CONCENTRATION={CONCENTRATION})")
+            print(f"Processing {len(selected_indices)} out of {data.data.shape[0]} slices (CONCENTRATION={CONCENTRATION})")
             all_detections = []
             
             streams = [torch.cuda.Stream() for _ in range(min(4, BATCH_SIZE))]
             
-            for batch_start in range(0, len(slice_files), BATCH_SIZE):
-                batch_end = min(batch_start + BATCH_SIZE, len(slice_files))
-                batch_files = slice_files[batch_start:batch_end]
+            for batch_start in range(0, len(selected_indices), BATCH_SIZE):
+                batch_end = min(batch_start + BATCH_SIZE, len(selected_indices))
+                batch_indices = selected_indices[batch_start:batch_end]
                 
-                sub_batches = np.array_split(batch_files, len(streams))
+                sub_batches = np.array_split(batch_indices, len(streams))
                 for i, sub_batch in enumerate(sub_batches):
                     if len(sub_batch) == 0:
                         continue
                     stream = streams[i % len(streams)]
                     with torch.cuda.stream(stream):
-                        sub_batch_paths = [os.path.join(tomo_dir, slice_file) for slice_file in sub_batch]
-                        sub_batch_slice_nums = [int(slice_file.split('_')[1].split('.')[0]) for slice_file in sub_batch]                       
+                        #sub_batch_paths = [os.path.join(tomo_dir, slice_file) for slice_file in sub_batch]
+                        sub_batch_slice_nums = sub_batch   
+                        #print(sub_batch_slice_nums)
                         with torch.amp.autocast('cuda'), torch.no_grad():
-                            sub_results = model(sub_batch_paths, verbose=False)
+                            data_in = []
+                            for i_slice in sub_batch_slice_nums:
+                                data_in.append(data.data[i_slice,:,:,None])
+                                data_in[-1] = data_in[-1][:,:,[0,0,0]]
+                            sub_results = model(data_in, verbose=False)
                         for j, result in enumerate(sub_results):
                             if len(result.boxes) > 0:
                                 for box_idx, confidence in enumerate(result.boxes.conf):
@@ -501,13 +506,7 @@ class YOLOModel(fls.Model):
         if not self.fix_norm_bug:
             preprocessor.scale_std = False
             preprocessor.scale_percentile = False
-        img_dir = fls.temp_dir + '/yolo_img_temp' + fls.process_name + '/'        
         preprocessor.load_and_preprocess(data)        
-        try: shutil.rmtree(img_dir)
-        except: pass
-        os.makedirs(img_dir)
-        for ii in range(data.data.shape[0]):
-            cv2.imwrite(img_dir + f"slice_{ii:04d}.jpg", data.data[ii,:,:])
 
         
         NMS_IOU_THRESHOLD = 0.2
