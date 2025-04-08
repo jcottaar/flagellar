@@ -17,7 +17,6 @@ import sklearn.mixture
 import sklearn.gaussian_process
 import h5py
 import cupy as cp
-import time
 
 @dataclass
 class Preprocessor(fls.BaseClass):
@@ -38,20 +37,22 @@ class Preprocessor(fls.BaseClass):
 
     return_uint8 = False
 
-    @fls.profile_each_line
+    #@fls.profile_each_line
     def load_and_preprocess(self, data, desired_original_slices = None):
 
         data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
 
-        img_list = []
-        for i in range(data.data.shape[0]):
-            img_list.append(cp.array(data.data[i,:,:]).astype(cp.float16))
-        img = cp.stack(img_list)
-        print(img.shape)
-
-        print('starting sync')
-        cp.cuda.Device().synchronize()
-        print('sync done')
+        fls.claim_gpu('cupy')
+        while True:
+            try:
+                img = cp.array(data.data).astype(cp.float16)
+                break
+            except:
+                fls.claim_gpu('')
+                time.sleep(1)
+                fls.claim_gpu('cupy')
+                print('failed cupy')
+                pass
 
         # Resize
         if self.resize:
@@ -93,7 +94,7 @@ class Preprocessor(fls.BaseClass):
             img = (img - mean_per_slice[:,None,None]) / std_per_slice[:,None,None]
             #for ii in range(img.shape[0]):
             #    img[ii,:,:,] = (img[ii,:,:,]-mean_list[ii])/std_list[ii]
-
+        
         # Cast to uint8
         if self.return_uint8:
             if self.scale_percentile:
@@ -102,15 +103,6 @@ class Preprocessor(fls.BaseClass):
                 img = (img).astype(cp.uint8)
             assert not self.scale_std
 
-        print('starting sync')
-        cp.cuda.Device().synchronize()
-        print('sync done')
-        print('back')
-        data.data = np.empty(img.shape)
-        for i in range(data.data.shape[0]):
-            print(cp.mean(img[i,:,:]))
-        for i in range(data.data.shape[0]):
-            print(i)
-            data.data[i,:,: ] =  cp.asnumpy(img_list[i])
-        raise 'wrong'
+        data.data = cp.asnumpy(img)
+
     
