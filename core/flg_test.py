@@ -78,8 +78,10 @@ def test_unet_alt(update_reference=False):
 def test_yolo_infer(update_reference=False):
     train_data = fls.load_all_train_data()
     model = fls.dill_load(fls.temp_dir + 'yolo_test.pickle')
-    res = [r.labels for r in model.infer(train_data[19:21])]
+    rr = model.infer(train_data[19:21])
+    res = [r.labels for r in rr]
 
+    print(rr[0].labels_unfiltered)
     print(res)
 
     if fls.env=='local':

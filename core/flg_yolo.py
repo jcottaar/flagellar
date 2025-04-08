@@ -486,6 +486,7 @@ class YOLOModel(fls.Model):
                                         })
                 torch.cuda.synchronize()
 
+            data.labels_unfiltered = all_detections
             final_detections = perform_3d_nms(all_detections, NMS_IOU_THRESHOLD)
             final_detections.sort(key=lambda x: x['confidence'], reverse=True)
             
