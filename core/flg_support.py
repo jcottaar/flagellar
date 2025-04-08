@@ -440,21 +440,18 @@ class DataSelector(BaseClass):
     include_multi_motor: bool = field(init=False, default=True)
 
     def select(self,data):
-        print(len(data))
         if not self.include_multi_motor:
             data_out = []
             for d in data:
                 if len(d.labels)<=1:
                     data_out.append(d)
             data = data_out
-        print(len(data))
 
         data_out = []
         for d in data:
             if d.name[:3] in self.datasets:
                 data_out.append(d)
         data = data_out
-        print(len(data))
         return data
 
 @dataclass

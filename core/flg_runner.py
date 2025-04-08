@@ -38,7 +38,7 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.2), setattr)
     res.modifier_dict['scale'] = pm(0.5, lambda r:r.uniform(0,0.7)*(r.uniform()>0.2), setattr)
     res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), setattr)
-    res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), setattr)
+    res.modifier_dict['flipud'] = pm(0., lambda r:0.5*(r.uniform()>0.2), setattr)
     res.modifier_dict['degrees'] = pm(0., lambda r:180*(r.uniform()>0.8), setattr)
     res.modifier_dict['shear'] = pm(0., lambda r:0.2*(r.uniform()>0.8), setattr)
     res.modifier_dict['mosaic'] = pm(1.0, lambda r:1.0*(r.uniform()>0.5), setattr)
@@ -50,9 +50,9 @@ def baseline_runner(fast_mode = False):
 
     res.base_model.train_data_selector.datasets = []
     res.modifier_dict['tom'] = pm(True, lambda r:r.uniform()>0.5, add_dataset)
-    res.modifier_dict['mba'] = pm(True, lambda r:r.uniform()>0.5, add_dataset)
-    res.modifier_dict['aba'] = pm(True, lambda r:r.uniform()>0.5, add_dataset)
-    res.modifier_dict['ycw'] = pm(True, lambda r:r.uniform()>0.5, add_dataset)
+    res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
+    res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
+    res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
     if fast_mode:
         res.label = 'Baseline fast mode'
         res.train_part = slice(0,30)
@@ -70,6 +70,7 @@ class ModelRunner(fls.BaseClass):
     seed=0
     base_model=0
     modifier_dict: dict = field(init=True, default_factory=dict)
+    use_missing_value = False
     N_test_positive = 300
     N_test_negative = 50
     train_part: slice = field(init=True, default_factory = lambda:slice(None,None,None))
@@ -117,7 +118,10 @@ class ModelRunner(fls.BaseClass):
                 self.modifier_values['seed'] = self.seed
                 model.seed = self.seed            
                 for key, value in self.modifier_dict.items():  
-                    self.modifier_values[key] = value.random_function(rng)
+                    if not self.use_missing_value:
+                        self.modifier_values[key] = value.random_function(rng)
+                    else:
+                        self.modifier_values[key] = value.missing_value
                     value.modifier_function(model, key, self.modifier_values[key])
                 self.untrained_model = copy.deepcopy(model)
                 print(self.modifier_values)
