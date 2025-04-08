@@ -210,8 +210,9 @@ def claim_gpu(new_claimant):
 
 @decorator
 def profile_each_line(func, *args, **kwargs):
-    if not profiling:
-        return func(*args, **kwargs)
+    assert profiling
+    #if not profiling:
+    #    return func(*args, **kwargs)
     profiler = LineProfiler()
     profiled_func = profiler(func)
     try:
