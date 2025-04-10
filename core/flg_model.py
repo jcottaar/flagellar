@@ -14,6 +14,7 @@ import pathlib
 import flg_support as fls
 import flg_numerics
 import flg_unet
+import flg_yolo2
 import sklearn.neighbors
 import cupy as cp
 import warnings
@@ -77,13 +78,16 @@ class HeatMapToLocations(fls.BaseClass):
 
 @dataclass
 class SelectSingleMotors(fls.BaseClass):
-    max_logit_threshold: float = field(init=True, default = 0.)
+    threshold: float = field(init=True, default = 0.)
+    x_val = 'size'
+    y_val = 'max_logit'
+    vals: object = field(init=True, default_factory = lambda:np.linspace(-10,100,100))
 
     def select_motors(self,d):
         d.labels = copy.deepcopy(d.labels_unfiltered)
-        d.labels = d.labels[d.labels['max_logit']>self.max_logit_threshold]
+        d.labels = d.labels[d.labels[self.y_val]>self.threshold]
         if len(d.labels)>0:
-            row = np.argmax(d.labels['max_logit'].to_numpy())
+            row = np.argmax(d.labels[self.y_val].to_numpy())
             d.labels = d.labels[row:row+1]        
 
     def calibrate(self, data, reference_data):
@@ -97,12 +101,12 @@ class SelectSingleMotors(fls.BaseClass):
             for d in range(len(t.labels_unfiltered)):
                 #print( t.labels_unfiltered['tf_pn']
                 if t.labels_unfiltered['tf_pn'][d]==0:
-                    cs_tp.append(t.labels_unfiltered['size'][d])
-                    log_tp.append(t.labels_unfiltered['max_logit'][d])
+                    cs_tp.append(t.labels_unfiltered[self.x_val][d])
+                    log_tp.append(t.labels_unfiltered[self.y_val][d])
                     has_tp = True
                 if t.labels_unfiltered['tf_pn'][d]==1:
-                    cs_fp.append(t.labels_unfiltered['size'][d])
-                    log_fp.append(t.labels_unfiltered['max_logit'][d])
+                    cs_fp.append(t.labels_unfiltered[self.x_val][d])
+                    log_fp.append(t.labels_unfiltered[self.y_val][d])
             if has_tp:
                 tp += 1
         plt.figure(figsize=(18,18))
@@ -112,21 +116,21 @@ class SelectSingleMotors(fls.BaseClass):
         plt.grid(True)
         plt.pause(0.01)
         
-        thresholds_try = np.linspace(-10,100,100)
+        thresholds_try = self.vals
         scores = []
         for t in thresholds_try:
             data_try = copy.deepcopy(data)
-            self.max_logit_threshold = t
+            self.threshold = t
             for d in data_try:
                 self.select_motors(d)
             scores.append(fls.score_competition_metric(data_try, reference_data))
             
         plt.figure()
         plt.plot(thresholds_try,scores)
-        plt.xlabel('Max logit threshold')
+        plt.xlabel('Threshold')
         plt.ylabel('Score')
         plt.grid(True)
-        self.max_logit_threshold = thresholds_try[np.argmax(scores)]
+        self.threshold = thresholds_try[np.argmax(scores)]
         plt.pause(0.01)
         
 
@@ -188,5 +192,63 @@ class ThreeStepModel(fls.Model):
         #     #plt.clim([0,0.1])
         #     plt.title(data.name)
         return data
+
+@dataclass
+class TwoStepModel(fls.Model):
+    # Runs modeling in 2 steps:
+    # 1) create labels from data
+    # 2) select a subset as output (optionally one per tomogram)
+    step1Labels: object = field(init=True, default_factory=flg_yolo2.YOLOModel)
+    step2Output: object = field(init=True, default_factory=SelectSingleMotors)
+
+    calibrate_step_2: bool = field(init=True, default=True)
+    # Intermediate
+    data_after_step1 = 0
+
+    # Internal
+    run_to: int = field(init=True, default=0) # 0: run all, 1: stop after creating labels
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.step2Output.x_val = 'confidence'
+        self.step2Output.y_val = 'confidence'
+        self.step2Output.vals = np.linspace(0,1,1000)
+
+    def _train(self, train_data, validation_data):
+        self.step1Labels.seed = self.seed
+        if self.step1Labels.trained_model==0:
+            self.step1Labels.train(train_data, validation_data)
+
+        if self.calibrate_step_2:
+            self_temp = copy.deepcopy(self)
+            self_temp.run_to = 1
+            self_temp.state = 1
+            self.data_after_step1 = self_temp.infer(validation_data)
+            fls.mark_tf_pn(self.data_after_step1, validation_data)    
+            self.step2Output.calibrate(self.data_after_step1, validation_data)
+
+    
+    def _infer_single(self,data):   
+        if not self.data_after_step1 == 0:
+            prev_names = [d.name for d in self.data_after_step1]
+        if self.data_after_step1 == 0 or not data.name in prev_names:
+            data.labels_unfiltered = self.step1Labels.infer(data)
+        else:
+            for d in self.data_after_step1:
+                if d.name == data.name:
+                    data.labels_unfiltered = d.labels_unfiltered
+
+        if self.run_to==0:
+            self.step2Output.select_motors(data)
+
+        # print(data.labels)
+        # if not fls.is_submission:
+        #     plt.figure()
+        #     plt.imshow(np.max(heatmap, axis=0), cmap='bone')
+        #     plt.colorbar()
+        #     #plt.clim([0,0.1])
+        #     plt.title(data.name)
+        return data
+
 
 

@@ -30,12 +30,16 @@ from dataclasses import dataclass, field, fields
 import copy
 import subprocess
 import importlib
+import flg_preprocess
 
 
 ran_with_albs = False
 
 @dataclass
-class YOLOModel(fls.Model):
+class YOLOModel(fls.BaseClass):
+    preprocessor: object = field(init=True, default_factory=flg_preprocess.Preprocessor)
+    seed = None
+    
     #Input
     img_size = 640
     n_epochs = 30
@@ -79,7 +83,8 @@ class YOLOModel(fls.Model):
 
 
     # infer
-    confidence_threshold = 0.45
+    confidence_threshold = 0.2
+    distance_threshold = 100
     
     trained_model = 0
     
@@ -92,7 +97,7 @@ class YOLOModel(fls.Model):
 
     
    
-    def _train(self,train_data,validation_data):
+    def train(self,train_data,validation_data):
 
 
         global ran_with_albs
@@ -401,7 +406,7 @@ class YOLOModel(fls.Model):
 
         self.trained_model = ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt')
 
-    def _infer_single(self,data):   
+    def infer(self,data):   
             
         def preload_image_batch(file_paths):
             """Preload a batch of images to CPU memory."""
@@ -413,7 +418,7 @@ class YOLOModel(fls.Model):
                 images.append(img)
             return images
         
-        def perform_3d_nms(detections, iou_threshold):
+        def perform_3d_nms(detections):
             """
             Perform 3D Non-Maximum Suppression on detections to merge nearby motors.
             """
@@ -424,14 +429,12 @@ class YOLOModel(fls.Model):
             final_detections = []
             def distance_3d(d1, d2):
                 return np.sqrt((d1['z'] - d2['z'])**2 + (d1['y'] - d2['y'])**2 + (d1['x'] - d2['x'])**2)
-            
-            box_size = 24
-            distance_threshold = box_size * iou_threshold
+        
             
             while detections:
                 best_detection = detections.pop(0)
                 final_detections.append(best_detection)
-                detections = [d for d in detections if distance_3d(d, best_detection) > distance_threshold]
+                detections = [d for d in detections if distance_3d(d, best_detection) > self.distance_threshold]
             
             return final_detections
         
@@ -487,31 +490,31 @@ class YOLOModel(fls.Model):
                 torch.cuda.synchronize()
 
             data.labels_unfiltered = all_detections
-            final_detections = perform_3d_nms(all_detections, NMS_IOU_THRESHOLD)
+            final_detections = perform_3d_nms(all_detections)
             final_detections.sort(key=lambda x: x['confidence'], reverse=True)
-            
-            if not final_detections:
-                return {'tomo_id': tomo_id, 'Motor axis 0': -1, 'Motor axis 1': -1, 'Motor axis 2': -1}
 
-            print(final_detections)
-            best_detection = final_detections[0]
-            return {
-                'tomo_id': tomo_id,
-                'Motor axis 0': round(best_detection['z']),
-                'Motor axis 1': round(best_detection['y']),
-                'Motor axis 2': round(best_detection['x'])
-            }
+            return final_detections
+            
+            # if not final_detections:
+            #     return {'tomo_id': tomo_id, 'Motor axis 0': -1, 'Motor axis 1': -1, 'Motor axis 2': -1}
+
+            # print(final_detections)
+            # best_detection = final_detections[0]
+            # return {
+            #     'tomo_id': tomo_id,
+            #     'Motor axis 0': round(best_detection['z']),
+            #     'Motor axis 1': round(best_detection['y']),
+            #     'Motor axis 2': round(best_detection['x'])
+            # }
         
 
         preprocessor = copy.deepcopy(self.preprocessor)
         if not self.fix_norm_bug:
             preprocessor.scale_std = False
             preprocessor.scale_percentile = False
-        preprocessor.load_and_preprocess(data)      
-        print(data.data.shape)
+        preprocessor.load_and_preprocess(data)        
 
         
-        NMS_IOU_THRESHOLD = 0.2
         CONCENTRATION = 1  # Process a fraction of slices for fast submission
         cpu, device = fls.prep_pytorch(self.seed, True, False)
         BATCH_SIZE = 32
@@ -523,18 +526,27 @@ class YOLOModel(fls.Model):
         motors_found = 0
 
         result = process_tomogram(data.name, self.trained_model, 1, 1)
-        has_motor = not pd.isna(result['Motor axis 0'])
-        if has_motor:
-            motors_found += 1
-            print(f"Motor found in {data.name} at position: z={result['Motor axis 0']}, y={result['Motor axis 1']}, x={result['Motor axis 2']}")
-            if not result['Motor axis 0']==-1:
-                d = {'z': [result['Motor axis 0']], 'y': [result['Motor axis 1']], 'x': [result['Motor axis 2']]}
-                data.labels = pd.DataFrame(d)                    
-            else:
-                data.labels = data.labels[0:0]
+        print(result)
+        if len(result)==0:
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence'])
         else:
-            print(f"No motor detected in {tomo_id}")
-            data.labels = data.labels[0:0]
+            return pd.DataFrame(result)
+        # print(data.labels)
+        # print(result)
+        # raise 'stop'
+        # return pd.DataFrame(result)
+        # has_motor = not pd.isna(result['Motor axis 0'])
+        # if has_motor:
+        #     motors_found += 1
+        #     print(f"Motor found in {data.name} at position: z={result['Motor axis 0']}, y={result['Motor axis 1']}, x={result['Motor axis 2']}")
+        #     if not result['Motor axis 0']==-1:
+        #         d = {'z': [result['Motor axis 0']], 'y': [result['Motor axis 1']], 'x': [result['Motor axis 2']]}
+        #         data.labels = pd.DataFrame(d)                    
+        #     else:
+        #         data.labels = data.labels[0:0]
+        # else:
+        #     print(f"No motor detected in {tomo_id}")
+        #     data.labels = data.labels[0:0]
 
-        return data
+        #return data
                 

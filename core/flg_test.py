@@ -3,6 +3,7 @@ import flg_unet
 import flg_numerics
 import flg_model
 import flg_yolo
+import flg_yolo2
 import flg_preprocess
 import importlib
 import numpy as np
@@ -12,6 +13,7 @@ import copy
 
 importlib.reload(flg_unet)
 importlib.reload(flg_yolo)
+importlib.reload(flg_yolo2)
 importlib.reload(flg_preprocess)
 
 def test_unet(update_reference=False):
@@ -78,10 +80,12 @@ def test_unet_alt(update_reference=False):
 def test_yolo_infer(update_reference=False):
     train_data = fls.load_all_train_data()
     model = fls.dill_load(fls.temp_dir + 'yolo_test.pickle')
+    model.step2Output.threshold = 0.1
     rr = model.infer(train_data[19:21])
     res = [r.labels for r in rr]
 
     print(rr[0].labels_unfiltered)
+    print(rr[1].labels_unfiltered)
     print(res)
 
     if fls.env=='local':
@@ -93,9 +97,10 @@ def test_yolo_infer(update_reference=False):
 
 def test_yolo(update_reference=False):
     train_data = fls.load_all_train_data()
-    model = flg_yolo.YOLOModel()
+    model = flg_model.TwoStepModel()
+    model.calibrate_step_2 = False
     model.seed = 0
-    model.n_epochs = 5
+    model.step1Labels.n_epochs = 5
     model.train(train_data[1:150], train_data[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
     test_yolo_infer(update_reference = update_reference)
