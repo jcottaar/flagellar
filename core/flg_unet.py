@@ -69,7 +69,7 @@ class DatasetTrain(torch.utils.data.IterableDataset):
 
     #@fls.profile_each_line
     def __iter__(self): 
-        @fls.profile_each_line
+        #@fls.profile_each_line
         def get_next():
             #t=time.time()
             # Determine which location in which tomogram we will use
@@ -347,7 +347,7 @@ class UNetModel(fls.BaseClass):
 
         
 
-    @fls.profile_each_line
+    #@fls.profile_each_line
     def infer(self, data):
         #TODO: TTA
 
