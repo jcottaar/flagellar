@@ -201,7 +201,8 @@ class TwoStepModel(fls.Model):
     step1Labels: object = field(init=True, default_factory=flg_yolo2.YOLOModel)
     step2Output: object = field(init=True, default_factory=SelectSingleMotors)
 
-    calibrate_step_2: bool = field(init=True, default=True)
+    calibrate_step_2: bool = field(init=True, default=False)
+    submission_threshold_offset: float = field(init=True, default=0.)
     # Intermediate
     data_after_step1 = 0
 
@@ -238,6 +239,8 @@ class TwoStepModel(fls.Model):
                 if d.name == data.name:
                     data.labels_unfiltered = d.labels_unfiltered
 
+        #if fls.is_submission:
+        data.labels_unfiltered['confidence'] = data.labels_unfiltered['confidence']+self.submission_threshold_offset
         if self.run_to==0:
             self.step2Output.select_motors(data)
 

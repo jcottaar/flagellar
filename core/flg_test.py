@@ -2,7 +2,7 @@ import flg_support as fls
 import flg_unet
 import flg_numerics
 import flg_model
-import flg_yolo
+#import flg_yolo
 import flg_yolo2
 import flg_preprocess
 import importlib
@@ -12,7 +12,7 @@ import time
 import copy
 
 importlib.reload(flg_unet)
-importlib.reload(flg_yolo)
+#importlib.reload(flg_yolo)
 importlib.reload(flg_yolo2)
 importlib.reload(flg_preprocess)
 
