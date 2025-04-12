@@ -214,6 +214,7 @@ class TwoStepModel(fls.Model):
         self.step2Output.x_val = 'confidence'
         self.step2Output.y_val = 'confidence'
         self.step2Output.vals = np.linspace(0,1,1000)
+        self.step2Output.threshold = 0.45
 
     def _train(self, train_data, validation_data):
         self.step1Labels.seed = self.seed

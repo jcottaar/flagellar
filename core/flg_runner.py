@@ -12,7 +12,7 @@ import enum
 import typing
 import pathlib
 import flg_support as fls
-import flg_yolo
+import flg_model
 import sklearn.neighbors
 import sklearn.mixture
 import sklearn.gaussian_process
@@ -21,31 +21,31 @@ import h5py
 def baseline_runner(fast_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
-    res.base_model = flg_yolo.YOLOModel()
+    res.base_model = flg_model.TwoStepModel()
     res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(1.,5.), prep)
-    res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-1,5)).item(), setattr)
-    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,50)).item(), setattr)    
+    res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-1,5)).item(), yolo)
+    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,50)).item(), yolo)    
     model_list = ['yolov8m', 'yolo11m']
-    res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], setattr)
-    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.2, setattr)
-    res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(20,28).item(), setattr)
-    res.modifier_dict['trust'] = pm(4, lambda r:r.integers(1,6).item(), setattr)
-    res.modifier_dict['fix_norm_bug'] = pm(False, lambda r:r.uniform()>0.5, setattr)
-    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0004,0.001), setattr)
-    res.modifier_dict['hsv_h'] = pm(0.015, lambda r:0.015*(r.uniform()>0.2), setattr)
-    res.modifier_dict['hsv_s'] = pm(0.7, lambda r:0.7*(r.uniform()>0.2), setattr)
-    res.modifier_dict['hsv_v'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), setattr)
-    res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.2), setattr)
-    res.modifier_dict['scale'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), setattr)
-    res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), setattr)
-    res.modifier_dict['flipud'] = pm(0., lambda r:0.5*(r.uniform()>0.2), setattr)
-    res.modifier_dict['degrees'] = pm(0., lambda r:0.*(r.uniform()>0.8), setattr)
-    res.modifier_dict['shear'] = pm(0., lambda r:0.*(r.uniform()>0.8), setattr)
-    res.modifier_dict['mosaic'] = pm(1.0, lambda r:1.0*(r.uniform()>0.2), setattr)
-    res.modifier_dict['mixup'] = pm(0.2, lambda r:0.2*(r.uniform()>0.2), setattr)
-    res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), setattr)
-    res.modifier_dict['use_albumentations'] = pm(False, lambda r:(r.uniform()>0.5), setattr)
-    res.modifier_dict['confidence_threshold'] = pm(0.45, lambda r:0.45, setattr)#r.uniform(0.35,0.55), setattr)
+    res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], yolo)
+    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.2, yolo)
+    res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(20,28).item(), yolo)
+    res.modifier_dict['trust'] = pm(4, lambda r:r.integers(1,6).item(), yolo)
+    res.modifier_dict['fix_norm_bug'] = pm(False, lambda r:r.uniform()>0.5, yolo)
+    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0004,0.001), yolo)
+    res.modifier_dict['hsv_h'] = pm(0.015, lambda r:0.015*(r.uniform()>0.2), yolo)
+    res.modifier_dict['hsv_s'] = pm(0.7, lambda r:0.7*(r.uniform()>0.2), yolo)
+    res.modifier_dict['hsv_v'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), yolo)
+    res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.2), yolo)
+    res.modifier_dict['scale'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), yolo)
+    res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), yolo)
+    res.modifier_dict['flipud'] = pm(0., lambda r:0.5*(r.uniform()>0.2), yolo)
+    res.modifier_dict['degrees'] = pm(0., lambda r:0.*(r.uniform()>0.8), yolo)
+    res.modifier_dict['shear'] = pm(0., lambda r:0.*(r.uniform()>0.8), yolo)
+    res.modifier_dict['mosaic'] = pm(1.0, lambda r:1.0*(r.uniform()>0.2), yolo)
+    res.modifier_dict['mixup'] = pm(0.2, lambda r:0.2*(r.uniform()>0.2), yolo)
+    res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), yolo)
+    res.modifier_dict['use_albumentations'] = pm(False, lambda r:(r.uniform()>0.5), yolo)
+    res.modifier_dict['confidence_threshold'] = pm(0.45, lambda r:0.45, yolo)#r.uniform(0.35,0.55), setattr)
     res.modifier_dict['include_multi_motor'] = pm(True, lambda r:r.uniform()>0.2, data_sel)
 
     res.base_model.train_data_selector.datasets = []
@@ -59,7 +59,7 @@ def baseline_runner(fast_mode = False):
         res.test_part = slice(0,13)
         res.N_test_positive = 10
         res.N_test_negative = 3
-        res.base_model.n_epochs = 2
+        res.base_model.step1Labels.n_epochs = 2
         del res.modifier_dict['n_epochs']
     return res
 
@@ -68,6 +68,7 @@ class ModelRunner(fls.BaseClass):
     # Inputs
     label: str = field(init=False, default = '')
     seed=0
+    env=''
     base_model=0
     modifier_dict: dict = field(init=True, default_factory=dict)
     use_missing_value = False
@@ -166,10 +167,13 @@ class PropertyModifier(fls.BaseClass):
     modifier_function = 0 # gets model, name (in dict), and value as input, should adapt model (does not have to return)    
 
 def prep(model, name, value):
-    setattr(model.preprocessor, name, value)
+    setattr(model.step1Labels.preprocessor, name, value)
 
 def data_sel(model, name, value):
     setattr(model.train_data_selector, name, value)
+
+def yolo(model, name, value):
+    setattr(model.step1Labels, name, value)
 
 def add_dataset(model, name, value):
     if value:

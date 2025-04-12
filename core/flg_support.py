@@ -251,6 +251,7 @@ class Data(BaseClass):
     name: str = field(init=True, default='')
     labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     labels_unfiltered: object = field(init=True, default_factory=pd.DataFrame)
+    labels_unfiltered2: object = field(init=True, default_factory=pd.DataFrame)
     loaded_state: str = field(init=False, default='unloaded') # unloaded, memory
     data: object = field(init=False, default=None) # None, 3D np array
     data_shape: tuple = field(init=False, default = (0,0,0))

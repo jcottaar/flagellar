@@ -84,8 +84,8 @@ def test_yolo_infer(update_reference=False):
     rr = model.infer(train_data[19:21])
     res = [r.labels for r in rr]
 
-    print(rr[0].labels_unfiltered)
-    print(rr[1].labels_unfiltered)
+    print(rr[0].labels_unfiltered2)
+    print(rr[1].labels_unfiltered2)
     print(res)
 
     if fls.env=='local':
@@ -100,6 +100,7 @@ def test_yolo(update_reference=False):
     model = flg_model.TwoStepModel()
     model.calibrate_step_2 = False
     model.seed = 0
+    model.step1Labels.n_ensemble = 2
     model.step1Labels.n_epochs = 5
     model.train(train_data[1:150], train_data[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)

@@ -41,6 +41,7 @@ class YOLOModel(fls.BaseClass):
     seed = None
     
     #Input
+    n_ensemble = 1
     img_size = 640
     n_epochs = 30
     model_name = 'yolov8m'
@@ -85,6 +86,7 @@ class YOLOModel(fls.BaseClass):
     # infer
     confidence_threshold = 0.2
     distance_threshold = 100
+    concentration = 1
     
     trained_model = 0
     
@@ -325,57 +327,63 @@ class YOLOModel(fls.BaseClass):
                 model (YOLO): Trained YOLO model.
                 results: Training results.
             """
-            if self.use_pretrained_weights:         
-                if not fls.env=='kaggle':
-                    model = ultralytics.YOLO(self.model_name + '.pt')
+            model_list =[]
+            for i_ensemble in range(self.n_ensemble):
+                fls.remove_and_make_dir(yolo_weights_dir)
+                if self.use_pretrained_weights:         
+                    if not fls.env=='kaggle':
+                        model = ultralytics.YOLO(self.model_name + '.pt')
+                    else:
+                        model = ultralytics.YOLO('/kaggle/usr/lib/ultralytics_for_offline_install_mine/' + self.model_name + '.pt')
                 else:
-                    model = ultralytics.YOLO('/kaggle/usr/lib/ultralytics_for_offline_install_mine/' + self.model_name + '.pt')
-            else:
-                model = ultralytics.YOLO(self.model_name + '.yaml')
-
-            from ultralytics import settings
-
-            # Update a setting
-            settings.update({"mlflow": False})
-
-            results = model.train(
-                data=yaml_path,
-                epochs=self.n_epochs,
-                batch=batch_size,
-                imgsz=self.img_size,
-                project=yolo_weights_dir,
-                name='motor_detector',
-                exist_ok=True,
-                patience=self.patience,  # Stop training if no improvement after 10 epochs
-                save_period=5,  # Save model every 5 epochs
-                val=True,
-                verbose=True,
-                optimizer="AdamW",  # AdamW optimizer for stability
-                lr0=self.lr0,  # Initial learning rate
-                lrf=self.lrf,  # Final learning rate factor
-                cos_lr=self.cos_lr,  # Use cosine learning rate decay
-                weight_decay=self.weight_decay,  # Prevent overfitting
-                dropout= self.dropout,
-                momentum=self.momentum,  # Momentum for better gradient updates
-                close_mosaic=self.close_mosaic,  # Disable mosaic augmentation after 10 epochs
-                box = self.box,
-                workers=4,  # Speed up data loading
-                augment=True,  # Enable additional augmentations
-                amp=True,  # Mixed precision training for faster performance
-                seed=self.seed,
-                hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=self.degrees, translate=self.translate, scale=self.scale, shear=self.shear, perspective=self.perspective, flipud=self.flipud, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=self.copy_paste, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=self.crop_fraction,
-            )
-        
-        
-            run_dir = os.path.join(yolo_weights_dir, 'motor_detector')
+                    model = ultralytics.YOLO(self.model_name + '.yaml')
+    
+                from ultralytics import settings
+    
+                # Update a setting
+                settings.update({"mlflow": False})
+    
+                results = model.train(
+                    data=yaml_path,
+                    epochs=self.n_epochs,
+                    batch=batch_size,
+                    imgsz=self.img_size,
+                    project=yolo_weights_dir,
+                    name='motor_detector',
+                    exist_ok=True,
+                    patience=self.patience,  # Stop training if no improvement after 10 epochs
+                    save_period=5,  # Save model every 5 epochs
+                    val=True,
+                    verbose=True,
+                    optimizer="AdamW",  # AdamW optimizer for stability
+                    lr0=self.lr0,  # Initial learning rate
+                    lrf=self.lrf,  # Final learning rate factor
+                    cos_lr=self.cos_lr,  # Use cosine learning rate decay
+                    weight_decay=self.weight_decay,  # Prevent overfitting
+                    dropout= self.dropout,
+                    momentum=self.momentum,  # Momentum for better gradient updates
+                    close_mosaic=self.close_mosaic,  # Disable mosaic augmentation after 10 epochs
+                    box = self.box,
+                    workers=4,  # Speed up data loading
+                    augment=True,  # Enable additional augmentations
+                    amp=True,  # Mixed precision training for faster performance
+                    seed=self.seed+100000*i_ensemble,
+                    hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=self.degrees, translate=self.translate, scale=self.scale, shear=self.shear, perspective=self.perspective, flipud=self.flipud, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=self.copy_paste, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=self.crop_fraction,
+                )
             
-            # If function is defined, plot loss curves for better insights
-            best_epoch_info = plot_dfl_loss_curve(run_dir)
-            if best_epoch_info:
-                best_epoch, best_val_loss = best_epoch_info
-                print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
-        
-            return model, results
+            
+                run_dir = os.path.join(yolo_weights_dir, 'motor_detector')
+                
+                # If function is defined, plot loss curves for better insights
+                best_epoch_info = plot_dfl_loss_curve(run_dir)
+                if best_epoch_info:
+                    best_epoch, best_val_loss = best_epoch_info
+                    print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
+
+                model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt'))
+
+            self.trained_model = model_list
+
         
         def prepare_dataset():
              
@@ -398,13 +406,13 @@ class YOLOModel(fls.BaseClass):
             print(f"YAML contents:\n{f.read()}")
         
         print("\nStarting YOLO training...")
-        model, results = train_yolo_model(
-            yaml_path,
-        )
+        train_yolo_model(yaml_path)
+        
+
         
         print("\nTraining complete!")
 
-        self.trained_model = ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt')
+        
 
     def infer(self,data):   
             
@@ -424,17 +432,49 @@ class YOLOModel(fls.BaseClass):
             """
             if not detections:
                 return []
-            
+            print(detections)
+            print('XXXXXXX')
             detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
+            if len(detections)>1000*len(self.trained_model):
+                detections = detections[:1000*len(self.trained_model)]            
+
+            zyx = []
+            for d in detections:
+                zyx.append([d['z'], d['y'], d['x']])
+            zyx = np.array(zyx)
+
+            import sklearn.cluster
+            clustering = sklearn.cluster.DBSCAN(eps=self.distance_threshold, min_samples=1).fit(zyx)
+
+            detections = pd.DataFrame(detections)
             final_detections = []
-            def distance_3d(d1, d2):
-                return np.sqrt((d1['z'] - d2['z'])**2 + (d1['y'] - d2['y'])**2 + (d1['x'] - d2['x'])**2)
+            for lab in np.unique(clustering.labels_):
+                this_detections = detections[clustering.labels_==lab].reset_index()
+                conf_per_model = []
+                for i_model in range(len(self.trained_model)):
+                    this_detections_this_model = this_detections[this_detections['i_model']==i_model]
+                    print('------------------')
+                    print(this_detections_this_model)
+                    print('------------------')
+                    if len(this_detections_this_model)==0:
+                        conf_per_model.append(self.confidence_threshold)
+                    else:
+                        conf_per_model.append(np.max(this_detections_this_model['confidence']))
+                conf = np.mean(conf_per_model)
+                final_detections.append({'z':this_detections['z'][0], 'y':this_detections['y'][0], 'x':this_detections['x'][0], 'confidence':conf})
+                print('FINAL')
+                print(final_detections)
+
+            
+            # final_detections = []
+            # def distance_3d(d1, d2):
+            #     return np.sqrt((d1['z'] - d2['z'])**2 + (d1['y'] - d2['y'])**2 + (d1['x'] - d2['x'])**2)
         
             
-            while detections:
-                best_detection = detections.pop(0)
-                final_detections.append(best_detection)
-                detections = [d for d in detections if distance_3d(d, best_detection) > self.distance_threshold]
+            # while detections:
+            #     best_detection = detections.pop(0)
+            #     final_detections.append(best_detection)
+            #     detections = [d for d in detections if distance_3d(d, best_detection) > self.distance_threshold]
             
             return final_detections
         
@@ -446,50 +486,53 @@ class YOLOModel(fls.BaseClass):
             #tomo_dir = img_dir
             #slice_files = sorted([f for f in os.listdir(tomo_dir) if f.endswith('.jpg')])
 
-            selected_indices = np.linspace(0, data.data.shape[0]-1, int(data.data.shape[0] * CONCENTRATION))
-            selected_indices = np.round(selected_indices).astype(int)
-            #slice_files = [slice_files[i] for i in selected_indices]
-            
-            print(f"Processing {len(selected_indices)} out of {data.data.shape[0]} slices (CONCENTRATION={CONCENTRATION})")
             all_detections = []
-            
-            streams = [torch.cuda.Stream() for _ in range(min(4, BATCH_SIZE))]
-            
-            for batch_start in range(0, len(selected_indices), BATCH_SIZE):
-                batch_end = min(batch_start + BATCH_SIZE, len(selected_indices))
-                batch_indices = selected_indices[batch_start:batch_end]
-                
-                sub_batches = np.array_split(batch_indices, len(streams))
-                for i, sub_batch in enumerate(sub_batches):
-                    if len(sub_batch) == 0:
-                        continue
-                    stream = streams[i % len(streams)]
-                    with torch.cuda.stream(stream):
-                        #sub_batch_paths = [os.path.join(tomo_dir, slice_file) for slice_file in sub_batch]
-                        sub_batch_slice_nums = sub_batch   
-                        #print(sub_batch_slice_nums)
-                        with torch.amp.autocast('cuda'), torch.no_grad():
-                            data_in = []
-                            for i_slice in sub_batch_slice_nums:
-                                data_in.append(data.data[i_slice,:,:,None])
-                                data_in[-1] = data_in[-1][:,:,[0,0,0]]
-                            sub_results = model(data_in, verbose=False)
-                        for j, result in enumerate(sub_results):
-                            if len(result.boxes) > 0:
-                                for box_idx, confidence in enumerate(result.boxes.conf):
-                                    if confidence >= self.confidence_threshold:
-                                        x1, y1, x2, y2 = result.boxes.xyxy[box_idx].cpu().numpy()
-                                        x_center = (x1 + x2) / 2
-                                        y_center = (y1 + y2) / 2
-                                        all_detections.append({
-                                            'z': round(data.slices_present[sub_batch_slice_nums[j]]),
-                                            'y': round(y_center),
-                                            'x': round(x_center),
-                                            'confidence': float(confidence)
-                                        })
-                torch.cuda.synchronize()
+            for i_model,this_model in enumerate(self.trained_model):
 
-            data.labels_unfiltered = all_detections
+                selected_indices = np.linspace(0, data.data.shape[0]-1, int(data.data.shape[0] * self.concentration))
+                selected_indices = np.round(selected_indices).astype(int)
+                #slice_files = [slice_files[i] for i in selected_indices]
+                
+                print(f"Processing {len(selected_indices)} out of {data.data.shape[0]} slices (CONCENTRATION={self.concentration})")
+                
+                streams = [torch.cuda.Stream() for _ in range(min(4, BATCH_SIZE))]
+                
+                for batch_start in range(0, len(selected_indices), BATCH_SIZE):
+                    batch_end = min(batch_start + BATCH_SIZE, len(selected_indices))
+                    batch_indices = selected_indices[batch_start:batch_end]
+                    
+                    sub_batches = np.array_split(batch_indices, len(streams))
+                    for i, sub_batch in enumerate(sub_batches):
+                        if len(sub_batch) == 0:
+                            continue
+                        stream = streams[i % len(streams)]
+                        with torch.cuda.stream(stream):
+                            #sub_batch_paths = [os.path.join(tomo_dir, slice_file) for slice_file in sub_batch]
+                            sub_batch_slice_nums = sub_batch   
+                            #print(sub_batch_slice_nums)
+                            with torch.amp.autocast('cuda'), torch.no_grad():
+                                data_in = []
+                                for i_slice in sub_batch_slice_nums:
+                                    data_in.append(data.data[i_slice,:,:,None])
+                                    data_in[-1] = data_in[-1][:,:,[0,0,0]]
+                                sub_results = this_model(data_in, verbose=False)
+                            for j, result in enumerate(sub_results):
+                                if len(result.boxes) > 0:
+                                    for box_idx, confidence in enumerate(result.boxes.conf):
+                                        if confidence >= self.confidence_threshold:
+                                            x1, y1, x2, y2 = result.boxes.xyxy[box_idx].cpu().numpy()
+                                            x_center = (x1 + x2) / 2
+                                            y_center = (y1 + y2) / 2
+                                            all_detections.append({
+                                                'z': round(data.slices_present[sub_batch_slice_nums[j]]),
+                                                'y': round(y_center),
+                                                'x': round(x_center),
+                                                'confidence': float(confidence),
+                                                'i_model': i_model
+                                            })
+                    torch.cuda.synchronize()
+
+            data.labels_unfiltered2 = all_detections
             final_detections = perform_3d_nms(all_detections)
             final_detections.sort(key=lambda x: x['confidence'], reverse=True)
 
@@ -515,12 +558,12 @@ class YOLOModel(fls.BaseClass):
         preprocessor.load_and_preprocess(data)        
 
         
-        CONCENTRATION = 1  # Process a fraction of slices for fast submission
         cpu, device = fls.prep_pytorch(self.seed, True, False)
         BATCH_SIZE = 32
-        
-        self.trained_model.to(device)
-        self.trained_model.fuse()
+
+        for this_model in self.trained_model:
+            this_model.to(device)
+            this_model.fuse()
 
         results = []
         motors_found = 0
