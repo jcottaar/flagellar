@@ -35,6 +35,9 @@ class Preprocessor(fls.BaseClass):
 
     scale_std = True
 
+    # Other
+    invert_sign = False
+
     return_uint8 = False
 
     #@fls.profile_each_line
@@ -102,6 +105,9 @@ class Preprocessor(fls.BaseClass):
             else:
                 img = (img).astype(cp.uint8)
             assert not self.scale_std
+
+        if self.invert_sign:
+            img = cp.max(img)-img
 
         data.data = cp.asnumpy(img)
 

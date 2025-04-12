@@ -197,12 +197,12 @@ class ThreeStepModel(fls.Model):
 class FindClusters(fls.BaseClass):
     distance_threshold = 100.
     min_confidence = np.nan
+    n_models = np.nan
 
     def cluster(self, data):
         """
         Perform 3D Non-Maximum Suppression on detections to merge nearby motors.
-        """
-        i_model_list = np.unique(data.labels_unfiltered2['i_model'])
+        """       
         detections = data.labels_unfiltered2.to_dict('records')
         if not detections:
             return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
@@ -223,7 +223,7 @@ class FindClusters(fls.BaseClass):
         for lab in np.unique(clustering.labels_):
             this_detections = detections[clustering.labels_==lab].reset_index()
             conf_per_model = []
-            for i_model in i_model_list:
+            for i_model in range(self.n_models):
                 this_detections_this_model = this_detections[this_detections['i_model']==i_model]
                 print('------------------')
                 print(this_detections_this_model)
@@ -296,6 +296,7 @@ class ThreeStepModelLabelBased(fls.Model):
                     data.labels_unfiltered2 = d.labels_unfiltered2
 
         self.step2Motors.min_confidence = self.step1Labels.confidence_threshold
+        self.step2Motors.n_models = self.step1Labels.n_ensemble
         data.labels_unfiltered = self.step2Motors.cluster(data) 
 
         #if fls.is_submission:
