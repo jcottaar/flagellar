@@ -46,7 +46,7 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['mixup'] = pm(0.2, lambda r:0.2*(r.uniform()>0.2), yolo)
     res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), yolo)
     res.modifier_dict['use_albumentations'] = pm(False, lambda r:(r.uniform()>0.5), yolo)
-    res.modifier_dict['confidence_threshold'] = pm(0.45, lambda r:0.45, yolo)#r.uniform(0.35,0.55), setattr)
+    #res.modifier_dict['confidence_threshold'] = pm(0.45, lambda r:0.45, yolo)#r.uniform(0.35,0.55), setattr)
     res.modifier_dict['include_multi_motor'] = pm(True, lambda r:r.uniform()>0.2, data_sel)
 
     res.base_model.train_data_selector.datasets = []
