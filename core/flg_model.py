@@ -194,56 +194,114 @@ class ThreeStepModel(fls.Model):
         return data
 
 @dataclass
-class TwoStepModel(fls.Model):
+class FindClusters(fls.BaseClass):
+    distance_threshold = 100.
+    min_confidence = np.nan
+
+    def cluster(self, data):
+        """
+        Perform 3D Non-Maximum Suppression on detections to merge nearby motors.
+        """
+        i_model_list = np.unique(data.labels_unfiltered2['i_model'])
+        detections = data.labels_unfiltered2.to_dict('records')
+        if not detections:
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
+        detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
+        if len(detections)>1000:
+            detections = detections[:1000]            
+    
+        zyx = []
+        for d in detections:
+            zyx.append([d['z'], d['y'], d['x']])
+        zyx = np.array(zyx)
+    
+        import sklearn.cluster
+        clustering = sklearn.cluster.DBSCAN(eps=self.distance_threshold, min_samples=1).fit(zyx)
+    
+        detections = pd.DataFrame(detections)
+        final_detections = []
+        for lab in np.unique(clustering.labels_):
+            this_detections = detections[clustering.labels_==lab].reset_index()
+            conf_per_model = []
+            for i_model in i_model_list:
+                this_detections_this_model = this_detections[this_detections['i_model']==i_model]
+                print('------------------')
+                print(this_detections_this_model)
+                print('------------------')
+                if len(this_detections_this_model)==0:
+                    conf_per_model.append(self.min_confidence)
+                else:
+                    conf_per_model.append(np.max(this_detections_this_model['confidence']))
+            conf = np.mean(conf_per_model)
+            final_detections.append({'z':this_detections['z'][0], 'y':this_detections['y'][0], 'x':this_detections['x'][0], 'confidence':conf})
+            #print('FINAL')
+            #print(final_detections)
+    
+        if len(final_detections)==0:
+            print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model']))
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
+        else:
+            print('FINAL')
+            print(pd.DataFrame(final_detections))
+            print('')
+            return pd.DataFrame(final_detections)
+
+
+@dataclass
+class ThreeStepModelLabelBased(fls.Model):
     # Runs modeling in 2 steps:
     # 1) create labels from data
     # 2) select a subset as output (optionally one per tomogram)
     step1Labels: object = field(init=True, default_factory=flg_yolo2.YOLOModel)
-    step2Output: object = field(init=True, default_factory=SelectSingleMotors)
+    step2Motors: object = field(init=True, default_factory=FindClusters)
+    step3Output: object = field(init=True, default_factory=SelectSingleMotors)
 
-    calibrate_step_2: bool = field(init=True, default=False)
+    calibrate_step_3: bool = field(init=True, default=False)
     submission_threshold_offset: float = field(init=True, default=0.)
     # Intermediate
-    data_after_step1 = 0
+    data_after_step2 = 0
 
     # Internal
     run_to: int = field(init=True, default=0) # 0: run all, 1: stop after creating labels
 
     def __post_init__(self):
         super().__post_init__()
-        self.step2Output.x_val = 'confidence'
-        self.step2Output.y_val = 'confidence'
-        self.step2Output.vals = np.linspace(0,1,1000)
-        self.step2Output.threshold = 0.45
+        self.step3Output.x_val = 'confidence'
+        self.step3Output.y_val = 'confidence'
+        self.step3Output.vals = np.linspace(0,1,1000)
+        self.step3Output.threshold = 0.45
 
     def _train(self, train_data, validation_data):
         self.step1Labels.seed = self.seed
         if self.step1Labels.trained_model==0:
             self.step1Labels.train(train_data, validation_data)
 
-        if self.calibrate_step_2:
+        if self.calibrate_step_3:
             self_temp = copy.deepcopy(self)
             self_temp.run_to = 1
             self_temp.state = 1
-            self.data_after_step1 = self_temp.infer(validation_data)
-            fls.mark_tf_pn(self.data_after_step1, validation_data)    
-            self.step2Output.calibrate(self.data_after_step1, validation_data)
+            self.data_after_step2 = self_temp.infer(validation_data)
+            fls.mark_tf_pn(self.data_after_step2, validation_data)    
+            self.step3Output.calibrate(self.data_after_step2, validation_data)
 
     
     def _infer_single(self,data):   
-        if not self.data_after_step1 == 0:
-            prev_names = [d.name for d in self.data_after_step1]
-        if self.data_after_step1 == 0 or not data.name in prev_names:
-            data.labels_unfiltered = self.step1Labels.infer(data)
+        if not self.data_after_step2 == 0:
+            prev_names = [d.name for d in self.data_after_step2]
+        if self.data_after_step2 == 0 or not data.name in prev_names:
+            data.labels_unfiltered2 = self.step1Labels.infer(data)
         else:
-            for d in self.data_after_step1:
+            for d in self.data_after_step2:
                 if d.name == data.name:
-                    data.labels_unfiltered = d.labels_unfiltered
+                    data.labels_unfiltered2 = d.labels_unfiltered2
+
+        self.step2Motors.min_confidence = self.step1Labels.confidence_threshold
+        data.labels_unfiltered = self.step2Motors.cluster(data) 
 
         #if fls.is_submission:
         data.labels_unfiltered['confidence'] = data.labels_unfiltered['confidence']+self.submission_threshold_offset
-        if self.run_to==0:
-            self.step2Output.select_motors(data)
+        if self.run_to==0:            
+            self.step3Output.select_motors(data)
 
         # print(data.labels)
         # if not fls.is_submission:

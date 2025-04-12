@@ -85,7 +85,6 @@ class YOLOModel(fls.BaseClass):
 
     # infer
     confidence_threshold = 0.2
-    distance_threshold = 100
     concentration = 1
     
     trained_model = 0
@@ -426,57 +425,7 @@ class YOLOModel(fls.BaseClass):
                 images.append(img)
             return images
         
-        def perform_3d_nms(detections):
-            """
-            Perform 3D Non-Maximum Suppression on detections to merge nearby motors.
-            """
-            if not detections:
-                return []
-            print(detections)
-            print('XXXXXXX')
-            detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
-            if len(detections)>1000*len(self.trained_model):
-                detections = detections[:1000*len(self.trained_model)]            
-
-            zyx = []
-            for d in detections:
-                zyx.append([d['z'], d['y'], d['x']])
-            zyx = np.array(zyx)
-
-            import sklearn.cluster
-            clustering = sklearn.cluster.DBSCAN(eps=self.distance_threshold, min_samples=1).fit(zyx)
-
-            detections = pd.DataFrame(detections)
-            final_detections = []
-            for lab in np.unique(clustering.labels_):
-                this_detections = detections[clustering.labels_==lab].reset_index()
-                conf_per_model = []
-                for i_model in range(len(self.trained_model)):
-                    this_detections_this_model = this_detections[this_detections['i_model']==i_model]
-                    print('------------------')
-                    print(this_detections_this_model)
-                    print('------------------')
-                    if len(this_detections_this_model)==0:
-                        conf_per_model.append(self.confidence_threshold)
-                    else:
-                        conf_per_model.append(np.max(this_detections_this_model['confidence']))
-                conf = np.mean(conf_per_model)
-                final_detections.append({'z':this_detections['z'][0], 'y':this_detections['y'][0], 'x':this_detections['x'][0], 'confidence':conf})
-                print('FINAL')
-                print(final_detections)
-
-            
-            # final_detections = []
-            # def distance_3d(d1, d2):
-            #     return np.sqrt((d1['z'] - d2['z'])**2 + (d1['y'] - d2['y'])**2 + (d1['x'] - d2['x'])**2)
-        
-            
-            # while detections:
-            #     best_detection = detections.pop(0)
-            #     final_detections.append(best_detection)
-            #     detections = [d for d in detections if distance_3d(d, best_detection) > self.distance_threshold]
-            
-            return final_detections
+       
         
         def process_tomogram(tomo_id, model, index=0, total=1):
             """
@@ -532,11 +481,10 @@ class YOLOModel(fls.BaseClass):
                                             })
                     torch.cuda.synchronize()
 
-            data.labels_unfiltered2 = all_detections
-            final_detections = perform_3d_nms(all_detections)
-            final_detections.sort(key=lambda x: x['confidence'], reverse=True)
+            #final_detections = perform_3d_nms(all_detections)
+            #final_detections.sort(key=lambda x: x['confidence'], reverse=True)
 
-            return final_detections
+            return all_detections
             
             # if not final_detections:
             #     return {'tomo_id': tomo_id, 'Motor axis 0': -1, 'Motor axis 1': -1, 'Motor axis 2': -1}
@@ -569,9 +517,8 @@ class YOLOModel(fls.BaseClass):
         motors_found = 0
 
         result = process_tomogram(data.name, self.trained_model, 1, 1)
-        print(result)
         if len(result)==0:
-            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence'])
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
         else:
             return pd.DataFrame(result)
         # print(data.labels)

@@ -21,22 +21,22 @@ import h5py
 def baseline_runner(fast_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
-    res.base_model = flg_model.TwoStepModel()
+    res.base_model = flg_model.ThreeStepModelLabelBased()
     res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(1.,5.), prep)
     res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-1,5)).item(), yolo)
-    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,50)).item(), yolo)    
+    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(25,41)).item(), yolo)    
     model_list = ['yolov8m', 'yolo11m']
     res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.2, yolo)
     res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(20,28).item(), yolo)
-    res.modifier_dict['trust'] = pm(4, lambda r:r.integers(1,6).item(), yolo)
+    res.modifier_dict['trust'] = pm(4, lambda r:r.integers(3,7).item(), yolo)
     res.modifier_dict['fix_norm_bug'] = pm(False, lambda r:r.uniform()>0.5, yolo)
-    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0004,0.001), yolo)
+    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0002,0.0006), yolo)
     res.modifier_dict['hsv_h'] = pm(0.015, lambda r:0.015*(r.uniform()>0.2), yolo)
     res.modifier_dict['hsv_s'] = pm(0.7, lambda r:0.7*(r.uniform()>0.2), yolo)
     res.modifier_dict['hsv_v'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), yolo)
-    res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.2), yolo)
-    res.modifier_dict['scale'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), yolo)
+    res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.8), yolo)
+    res.modifier_dict['scale'] = pm(0.5, lambda r:0.5*(r.uniform()>0.8), yolo)
     res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), yolo)
     res.modifier_dict['flipud'] = pm(0., lambda r:0.5*(r.uniform()>0.2), yolo)
     res.modifier_dict['degrees'] = pm(0., lambda r:0.*(r.uniform()>0.8), yolo)
@@ -49,7 +49,7 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['include_multi_motor'] = pm(True, lambda r:r.uniform()>0.2, data_sel)
 
     res.base_model.train_data_selector.datasets = []
-    res.modifier_dict['tom'] = pm(True, lambda r:r.uniform()>0.2, add_dataset)
+    res.modifier_dict['tom'] = pm(True, lambda r:r.uniform()>0., add_dataset)
     res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
     res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
     res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
@@ -90,64 +90,64 @@ class ModelRunner(fls.BaseClass):
     exception = 0
             
     def run(self):
-        try: 
-            # Split train and test data
-            all_data = fls.load_all_train_data() + fls.load_all_extra_data()
-            np.random.default_rng(seed=0).shuffle(all_data)
-            n_motors = np.array([len(d.labels) for d in all_data])
-            inds_zero = np.argwhere(n_motors==0)[:self.N_test_negative,0]
-            inds_one = np.argwhere(n_motors==1)[:self.N_test_positive,0]
-            inds_test = np.concatenate((inds_zero,inds_one))
-            inds_train = np.setdiff1d(np.arange(len(n_motors)), inds_test)
+        #ry: 
+        # Split train and test data
+        all_data = fls.load_all_train_data() + fls.load_all_extra_data()
+        np.random.default_rng(seed=0).shuffle(all_data)
+        n_motors = np.array([len(d.labels) for d in all_data])
+        inds_zero = np.argwhere(n_motors==0)[:self.N_test_negative,0]
+        inds_one = np.argwhere(n_motors==1)[:self.N_test_positive,0]
+        inds_test = np.concatenate((inds_zero,inds_one))
+        inds_train = np.setdiff1d(np.arange(len(n_motors)), inds_test)
 
-            train_data = []
-            for i in inds_train:
-                train_data.append(all_data[i])
-            test_data = []
-            for i in inds_test:
-                test_data.append(all_data[i])        
-            print(len(train_data), len(test_data))
-            self.train_data = train_data[self.train_part]
-            self.test_data = test_data[self.test_part]
-            print(len(self.train_data), len(self.test_data))
+        train_data = []
+        for i in inds_train:
+            train_data.append(all_data[i])
+        test_data = []
+        for i in inds_test:
+            test_data.append(all_data[i])        
+        print(len(train_data), len(test_data))
+        self.train_data = train_data[self.train_part]
+        self.test_data = test_data[self.test_part]
+        print(len(self.train_data), len(self.test_data))
+        
+        # Set up modified model
+        rng = np.random.default_rng(seed=self.seed)
+        while True:
+            model = copy.deepcopy(self.base_model)
+            self.modifier_values = dict()
+            self.modifier_values['seed'] = self.seed
+            model.seed = self.seed            
+            for key, value in self.modifier_dict.items():  
+                if not self.use_missing_value:
+                    self.modifier_values[key] = value.random_function(rng)
+                else:
+                    self.modifier_values[key] = value.missing_value
+                value.modifier_function(model, key, self.modifier_values[key])
+            self.untrained_model = copy.deepcopy(model)
+            print(self.modifier_values)
+            if len(model.train_data_selector.datasets)>0:
+                break
+        #return
+
+        # Train model
+        if self.train_in_subprocess:
+            model = model.train_subprocess(self.train_data, self.test_data)
+        else:
+            model.train(self.train_data, self.test_data)
+        self.trained_model = copy.deepcopy(model)
+
+        # Infer
+        #if fls.env=='vast':
+        model.run_in_parallel = False
+        self.inferred_test_data = model.infer(self.test_data)       
+        self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
             
-            # Set up modified model
-            rng = np.random.default_rng(seed=self.seed)
-            while True:
-                model = copy.deepcopy(self.base_model)
-                self.modifier_values = dict()
-                self.modifier_values['seed'] = self.seed
-                model.seed = self.seed            
-                for key, value in self.modifier_dict.items():  
-                    if not self.use_missing_value:
-                        self.modifier_values[key] = value.random_function(rng)
-                    else:
-                        self.modifier_values[key] = value.missing_value
-                    value.modifier_function(model, key, self.modifier_values[key])
-                self.untrained_model = copy.deepcopy(model)
-                print(self.modifier_values)
-                if len(model.train_data_selector.datasets)>0:
-                    break
-            #return
-    
-            # Train model
-            if self.train_in_subprocess:
-                model = model.train_subprocess(self.train_data, self.test_data)
-            else:
-                model.train(self.train_data, self.test_data)
-            self.trained_model = copy.deepcopy(model)
-    
-            # Infer
-            if fls.env=='vast':
-                model.run_in_parallel = False
-            self.inferred_test_data = model.infer(self.test_data)       
-            self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
-            
-        except Exception as e:
-            print('ERROR!')
-            import traceback
-            self.exception = traceback.format_exc()
-            print(self.exception)
+        # except Exception as e:
+        #     print('ERROR!')
+        #     import traceback
+        #     self.exception = traceback.format_exc()
+        #     print(self.exception)
             
 
 
