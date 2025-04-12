@@ -110,25 +110,36 @@ class SelectSingleMotors(fls.BaseClass):
             if has_tp:
                 tp += 1
         plt.figure(figsize=(18,18))
-        print('Number of true positives before filter: ', tp)
+        print('Number of true positives before filter: ', tp, ' out of ', np.sum([len(d.labels) for d in reference_data]))
         plt.scatter(cs_fp, log_fp, color='red')
         plt.scatter(cs_tp, log_tp, color='blue')        
         plt.grid(True)
         plt.pause(0.01)
         
         thresholds_try = self.vals
+        precisions = []
+        recalls = []
         scores = []
+        data_try_base = copy.deepcopy(data)
+        for d in data_try_base:
+            d.labels_unfiltered2 = []
         for t in thresholds_try:
-            data_try = copy.deepcopy(data)
+            data_try = copy.deepcopy(data_try_base)
             self.threshold = t
             for d in data_try:
                 self.select_motors(d)
-            scores.append(fls.score_competition_metric(data_try, reference_data))
+            score = fls.score_competition_metric(data_try, reference_data)
+            precisions.append(score[0])
+            recalls.append(score[1])
+            scores.append(score[2])
             
         plt.figure()
+        plt.plot(thresholds_try,precisions)
+        plt.plot(thresholds_try,recalls)
         plt.plot(thresholds_try,scores)
         plt.xlabel('Threshold')
-        plt.ylabel('Score')
+        plt.ylabel('Value')
+        plt.legend(['Precision', 'Recall', 'Score'])
         plt.grid(True)
         self.threshold = thresholds_try[np.argmax(scores)]
         plt.pause(0.01)
@@ -268,7 +279,7 @@ class ThreeStepModelLabelBased(fls.Model):
         super().__post_init__()
         self.step3Output.x_val = 'confidence'
         self.step3Output.y_val = 'confidence'
-        self.step3Output.vals = np.linspace(0,1,1000)
+        self.step3Output.vals = np.linspace(0,1,100)
         self.step3Output.threshold = 0.45
 
     def _train(self, train_data, validation_data):

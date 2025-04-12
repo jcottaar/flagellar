@@ -84,7 +84,8 @@ class YOLOModel(fls.BaseClass):
 
 
     # infer
-    confidence_threshold = 0.2
+    confidence_threshold = 0.01
+    relative_confidence_threshold = 0.2
     concentration = 1
     
     trained_model = 0
@@ -464,7 +465,7 @@ class YOLOModel(fls.BaseClass):
                                 for i_slice in sub_batch_slice_nums:
                                     data_in.append(data.data[i_slice,:,:,None])
                                     data_in[-1] = data_in[-1][:,:,[0,0,0]]
-                                sub_results = this_model(data_in, verbose=False)
+                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold)
                             for j, result in enumerate(sub_results):
                                 if len(result.boxes) > 0:
                                     for box_idx, confidence in enumerate(result.boxes.conf):
@@ -481,6 +482,10 @@ class YOLOModel(fls.BaseClass):
                                             })
                     torch.cuda.synchronize()
 
+            #if len(all_detections)==0:
+            #    all_detections = pd.DataFrame(all_detections, column = ['z', 'y', 'x', 'confidence', 'i_model'])
+            all_detections = pd.DataFrame(all_detections, columns = ['z', 'y', 'x', 'confidence', 'i_model'])
+            all_detections = all_detections[all_detections['confidence']>self.relative_confidence_threshold*np.max(all_detections['confidence'])]
             #final_detections = perform_3d_nms(all_detections)
             #final_detections.sort(key=lambda x: x['confidence'], reverse=True)
 
@@ -516,11 +521,11 @@ class YOLOModel(fls.BaseClass):
         results = []
         motors_found = 0
 
-        result = process_tomogram(data.name, self.trained_model, 1, 1)
-        if len(result)==0:
-            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
-        else:
-            return pd.DataFrame(result)
+        return process_tomogram(data.name, self.trained_model, 1, 1)
+        # if len(result)==0:
+        #     return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
+        # else:
+        #     return pd.DataFrame(result)
         # print(data.labels)
         # print(result)
         # raise 'stop'

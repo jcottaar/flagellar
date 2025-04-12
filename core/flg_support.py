@@ -683,7 +683,7 @@ def score_competition_metric(data, reference_data):
             min_radius=min_radius,
         )
     
-        return sklearn.metrics.fbeta_score(solution['Has motor'].values, predictions, beta=beta)
+        return sklearn.metrics.precision_score(solution['Has motor'].values, predictions,zero_division=1.),  sklearn.metrics.recall_score(solution['Has motor'].values, predictions), sklearn.metrics.fbeta_score(solution['Has motor'].values, predictions, beta=beta)
 
     row_df_sub = create_submission_dataframe(data, reference_data = reference_data)
     row_df_ref = create_submission_dataframe(reference_data, reference_data = reference_data, include_voxel_spacing=True)
