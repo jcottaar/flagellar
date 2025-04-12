@@ -41,7 +41,7 @@ class YOLOModel(fls.BaseClass):
     seed = None
     
     #Input
-    n_ensemble = 1
+    n_ensemble = 4
     img_size = 640
     n_epochs = 30
     model_name = 'yolov8m'
