@@ -103,7 +103,6 @@ def test_yolo(update_reference=False):
     model.seed = 0
     model.step1Labels.n_ensemble = 2
     model.step1Labels.n_epochs = 5
-    model.step1Labels.preprocessor.blur_z = 5
     model.train(train_data[1:150], train_data[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
     test_yolo_infer(update_reference = update_reference)
