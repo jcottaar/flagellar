@@ -25,6 +25,7 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['n_ensemble'] = pm(4, lambda r:4, yolo)
     res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(1.,5.), prep)
     res.modifier_dict['scale_std'] = pm(False, lambda r:r.uniform()>0.2, prep)
+    res.modifier_dict['blur_z'] = pm(1, lambda r:max(1,1+2*r.integers(-2,3)), prep) 
     res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-1,5)).item(), yolo)
     res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(25,41)).item(), yolo)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>0.2, use_best_epoch)   

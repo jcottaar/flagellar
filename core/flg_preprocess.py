@@ -17,6 +17,7 @@ import sklearn.mixture
 import sklearn.gaussian_process
 import h5py
 import cupy as cp
+import time
 
 @dataclass
 class Preprocessor(fls.BaseClass):
@@ -35,6 +36,9 @@ class Preprocessor(fls.BaseClass):
 
     scale_std = True
     scale_std_clip_value = 3.
+
+    # Blurring
+    blur_z = 1
 
     # Other
     invert_sign = False
@@ -89,6 +93,10 @@ class Preprocessor(fls.BaseClass):
                 img[ii,:,:] = (img[ii,:,:]-perc_low)/(perc_high-perc_low)
             if self.scale_percentile_clip:
                 img = cp.clip(img, 0., 1.)
+
+        blur_matrix = cp.ones((self.blur_z,1,1), dtype=cp.float16)/self.blur_z
+        import cupyx.scipy.signal
+        img = cupyx.scipy.signal.fftconvolve(img, blur_matrix, mode='same')
 
         # Scale STD
         if self.scale_std:
