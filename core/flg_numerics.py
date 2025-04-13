@@ -66,17 +66,23 @@ def collect_patches(data, sizes, normalize_slices = True):
     
     for d in data:        
         for index,row in d.labels.iterrows():
-            with h5py.File(d.data) as f:
-                coords = np.array((row['z'], row['y'], row['x']))
-                is_edge.append(not np.all(np.logical_and(coords >= sizes, coords <= np.array(np.shape(f['data'])) - sizes - 1)))
-                #to_append = copy.deepcopy(data_ext[coords[0]+3:coords[0]+2*sizes[0]+4,coords[1]+3:coords[1]+2*sizes[1]+4,coords[2]+3:coords[2]+2*sizes[2]+4])
-                #to_append = to_append - np.mean(to_append)
+            dd = copy.deepcopy(d)
+            coords = np.array((np.round(row['z']).astype(int), np.round(row['y']).astype(int), np.round(row['x']).astype(int)))
+            desired_slices = np.arange(coords[0]-sizes[0], coords[0]+sizes[0]+1)
+            desired_slices = desired_slices[desired_slices>=0]
+            desired_slices = desired_slices[desired_slices<dd.data_shape[0]]
+            dd.load_to_memory(desired_slices=list(desired_slices))            
+            coords[0] = len(dd.slices_present)//2
+            #is_edge.append(not np.all(np.logical_and(coords >= sizes, coords <= np.array(np.shape(f['data'])) - sizes - 1)))
+            is_edge = np.nan # todo
+            #to_append = copy.deepcopy(data_ext[coords[0]+3:coords[0]+2*sizes[0]+4,coords[1]+3:coords[1]+2*sizes[1]+4,coords[2]+3:coords[2]+2*sizes[2]+4])
+            #to_append = to_append - np.mean(to_append)
                
-                to_append = copy.deepcopy(extract_patch(f['data'], coords, sizes, constant_value=np.nan))
+            to_append = copy.deepcopy(extract_patch(dd.data, coords, sizes, constant_value=np.nan))            
             if normalize_slices:
-                mean_list = extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
-                std_list = extract_patch(d.std_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
-                to_append = (to_append-mean_list[:,np.newaxis,np.newaxis])/std_list[:,np.newaxis,np.newaxis]
+                 mean_list = np.nanmean(to_append, axis=(1,2))#extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+                 std_list = np.nanstd(to_append, axis=(1,2))#extract_patch(d.std_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+                 to_append = (to_append-mean_list[:,np.newaxis,np.newaxis])/std_list[:,np.newaxis,np.newaxis]
             collected.append( to_append )                     
 
     collected = np.stack(collected)

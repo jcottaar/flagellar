@@ -36,8 +36,8 @@ def animate_3d_matrix(animation_arr, fps=20, figsize=(6,6), axis_off=True):
         
     return anim
 
-def animate_labels(data_list, sizes, tile_num=5):
-    mat = flg_numerics.collect_patches(data_list, np.array(sizes),normalize_slices=True)[0]
+def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False):
+    mat = flg_numerics.collect_patches(data_list, np.array(sizes),normalize_slices=normalize_slices)[0]
     mat = np.nansum(mat,axis=1)[:,np.newaxis,:,:]    
     #print(mat.shape)
     #mat = np.reshape(mat, (-1, mat.shape[2], mat.shape[3]))
