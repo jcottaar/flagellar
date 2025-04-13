@@ -34,6 +34,7 @@ class Preprocessor(fls.BaseClass):
     scale_percentile_clip = True
 
     scale_std = True
+    scale_std_clip_value = 3.
 
     # Other
     invert_sign = False
@@ -87,14 +88,16 @@ class Preprocessor(fls.BaseClass):
                 perc_high = cp.percentile(img[ii,:,:], 100-self.scale_percentile_value)
                 img[ii,:,:] = (img[ii,:,:]-perc_low)/(perc_high-perc_low)
             if self.scale_percentile_clip:
-                img[img>1.] = 1.
-                img[img<0.] = 0.
+                img = cp.clip(img, 0., 1.)
 
         # Scale STD
         if self.scale_std:
             mean_per_slice = cp.mean(img,axis=(1,2))
             std_per_slice = cp.std(img.astype(cp.float32),axis=(1,2)).astype(cp.float16)
             img = (img - mean_per_slice[:,None,None]) / std_per_slice[:,None,None]
+            if not np.isnan(self.scale_std_clip_value):
+                img = (img+self.scale_std_clip_value)/(2*self.scale_std_clip_value)
+                img = cp.clip(img, 0., 1.)
             #for ii in range(img.shape[0]):
             #    img[ii,:,:,] = (img[ii,:,:,]-mean_list[ii])/std_list[ii]
         
@@ -104,7 +107,6 @@ class Preprocessor(fls.BaseClass):
                 img = (255*img).astype(cp.uint8)
             else:
                 img = (img).astype(cp.uint8)
-            assert not self.scale_std
 
         if self.invert_sign:
             img = cp.max(img)-img
