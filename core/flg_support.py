@@ -545,7 +545,7 @@ def mark_tf_pn(data, reference_data, mark_false_negative=False):
     for d,r in zip(data,reference_data):
         assert d.name==r.name
         #d.labels_unfiltered['tf_pn'] = np.nan
-        for row_d in range(len(d.labels_unfiltered)):
+        for row_d,_ in d.labels_unfiltered.iterrows():
             is_true_positive = False
             for row_r in range(len(r.labels)):
                 coordinate_cols = ['z', 'y', 'x']

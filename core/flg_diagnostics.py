@@ -36,7 +36,7 @@ def animate_3d_matrix(animation_arr, fps=20, figsize=(6,6), axis_off=True):
         
     return anim
 
-def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False):
+def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False, animate=True):
     mat = flg_numerics.collect_patches(data_list, np.array(sizes),normalize_slices=normalize_slices)[0]
     mat = np.nansum(mat,axis=1)[:,np.newaxis,:,:]    
     #print(mat.shape)
@@ -64,10 +64,111 @@ def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False):
     #print(len(mat_tiled_list))
     #print(mat_tiled_list[0].shape)
     mat_combined = np.concatenate(mat_tiled_list)
-    print(mat_combined.shape)
+    #print(mat_combined.shape)
 
-    return animate_3d_matrix(mat_combined,figsize=(8,8), fps=5)
+    if animate:
+        return animate_3d_matrix(mat_combined,figsize=(8,8), fps=5)
+    else:
+        plt.figure(figsize=(6,6))
+        plt.imshow(mat_combined[0,:,:], cmap='bone')
+        min_val = np.percentile(mat_combined, 2)
+        max_val = np.percentile(mat_combined,98)
+        plt.clim([min_val, max_val])
 
+
+def show_tf_pn(inferred_data, reference_data):
+    inferred_data_x = copy.deepcopy(inferred_data)
+    reference_data_x = copy.deepcopy(reference_data)
+
+    inds = np.random.default_rng(seed=0).permutation(len(inferred_data_x))
+
+    inferred_data = []; reference_data = [];
+    for i in inds:
+        inferred_data.append(inferred_data_x[i]); reference_data.append(reference_data_x[i]);
+
+    del inferred_data_x, reference_data_x
+
+    # True positives
+    for d in inferred_data:
+        d.labels_unfiltered2 = copy.deepcopy(d.labels_unfiltered)
+        d.labels_unfiltered = copy.deepcopy(d.labels)
+        assert(len(d.labels)<=1)
+        assert(len(d.labels_unfiltered)<=1)
+    fls.mark_tf_pn(inferred_data, reference_data)
+    for d in inferred_data:
+        assert(len(d.labels)<=1)
+        assert(len(d.labels_unfiltered)<=1)
+    to_plot = []
+    all_pos=0  
+    done = []
+    for i,(d,r) in enumerate(zip(inferred_data,reference_data)):
+        if len(r.labels)==1:
+            all_pos+=1
+        if len(d.labels_unfiltered)>0:
+            assert len(d.labels_unfiltered)==1
+            if d.labels_unfiltered.reset_index().at[0,'tf_pn'] == 0:
+                to_plot.append(r)
+                done.append(i)
+    print(f'True positives: {len(to_plot)} out of {all_pos}')
+    if len(to_plot)>64:
+        to_plot = to_plot[:64]
+    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
+    plt.title('True positives')
+
+    # False negatives - seen but not selected
+    for d in inferred_data:
+        d.labels_unfiltered = copy.deepcopy(d.labels_unfiltered2)
+    fls.mark_tf_pn(inferred_data, reference_data)
+    to_plot = []
+    for i,(d,r) in enumerate(zip(inferred_data,reference_data)):
+        if len(d.labels_unfiltered)>0 and np.any(d.labels_unfiltered['tf_pn']==0) and (not i in done):
+            assert(len(r.labels)==1)
+            to_plot.append(r)
+            done.append(i)
+    print(f'False negatives - seen but not selected: {len(to_plot)} out of {all_pos}')
+    if len(to_plot)>64:
+        to_plot = to_plot[:64]
+    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
+    plt.title('False negatives - seen but not selected')
+
+
+    # False negatives - not seen
+    to_plot = []
+    for i,(d,r) in enumerate(zip(inferred_data,reference_data)):
+        if len(r.labels)==1 and (not i in done):
+            assert len(d.labels_unfiltered)==0 or np.all(d.labels_unfiltered['tf_pn']==1)
+            to_plot.append(r)
+            done.append(i)
+    print(f'False negatives - not seen: {len(to_plot)} out of {all_pos}')
+    if len(to_plot)>64:
+        to_plot = to_plot[:64]
+    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
+    plt.title('False negatives - not seen')
+
+    # False positives
+    # for d in inferred_data:
+    #     d.labels_unfiltered2 = copy.deepcopy(d.labels_unfiltered)
+    #     d.labels_unfiltered = copy.deepcopy(d.labels)
+    #     assert(len(d.labels)<=1)
+    #     assert(len(d.labels_unfiltered)<=1)
+    # fls.mark_tf_pn(inferred_data, reference_data)
+    to_plot = []
+    all_neg = 0
+    for i,(d,r) in enumerate(zip(inferred_data,reference_data)):  
+        if len(r.labels)==0:
+            all_neg+=1
+        if len(d.labels)>0 and (not i in done):
+            assert len(r.labels)==0
+            to_plot.append(d)
+            done.append(i)
+    print(f'False positives: {len(to_plot)} out of {all_neg}')
+    if len(to_plot)>64:
+        to_plot = to_plot[:64]
+    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
+    plt.title('False positives')
+
+    
+    
     
             
                                        
