@@ -90,8 +90,10 @@ class YOLOModel(fls.BaseClass):
     confidence_threshold = 0.01
     relative_confidence_threshold = 0.2
     concentration = 1
-    
+
+    # trained
     trained_model = 0
+    train_results = 0
     
     def __post_init__(self):
         super().__post_init__()
@@ -331,6 +333,7 @@ class YOLOModel(fls.BaseClass):
                 results: Training results.
             """
             model_list =[]
+            train_results = []
             for i_ensemble in range(self.n_ensemble):
                 fls.remove_and_make_dir(yolo_weights_dir)
                 if self.use_pretrained_weights:         
@@ -377,15 +380,15 @@ class YOLOModel(fls.BaseClass):
                     seed=self.seed+100000*i_ensemble,
                     hsv_h=self.hsv_h, hsv_s=self.hsv_s, hsv_v=self.hsv_v, degrees=self.degrees, translate=self.translate, scale=self.scale, shear=self.shear, perspective=self.perspective, flipud=self.flipud, fliplr=self.fliplr, bgr=0.0, mosaic=self.mosaic, mixup=self.mixup, copy_paste=self.copy_paste, auto_augment=self.auto_augment, erasing=self.erasing, crop_fraction=self.crop_fraction,
                 )
-            
-            
+
                 run_dir = os.path.join(yolo_weights_dir, 'motor_detector')
                 
                 # If function is defined, plot loss curves for better insights
-                best_epoch_info = plot_dfl_loss_curve(run_dir)
-                if best_epoch_info:
-                    best_epoch, best_val_loss = best_epoch_info
-                    print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
+                train_results.append(pd.read_csv(os.path.join(run_dir, 'results.csv')))
+                #best_epoch_info = plot_dfl_loss_curve(run_dir)
+                #if best_epoch_info:
+                #    best_epoch, best_val_loss = best_epoch_info
+                #    print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
 
                 if self.use_best_epoch:
                     model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt'))
