@@ -32,6 +32,7 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.2, yolo)
     res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(20,28).item(), yolo)
     res.modifier_dict['trust'] = pm(4, lambda r:r.integers(3,7).item(), yolo)
+    res.modifier_dict['multi_scale_training'] = pm(True, lambda r:r.uniform()>0.2, yolo)   
     res.modifier_dict['fix_norm_bug'] = pm(False, lambda r:r.uniform()>0.5, yolo)
     res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0002,0.0006), yolo)
     res.modifier_dict['hsv_h'] = pm(0.015, lambda r:0.015*(r.uniform()>0.2), yolo)

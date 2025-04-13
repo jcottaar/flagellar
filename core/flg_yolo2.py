@@ -58,6 +58,7 @@ class YOLOModel(fls.BaseClass):
     weight_decay = 0.0005
     dropout= 0.0
     momentum=0.937
+    multi_scale_training = False
     
 
     box=7.5
@@ -314,7 +315,7 @@ class YOLOModel(fls.BaseClass):
             
             return best_epoch, best_val_loss
 
-        def train_yolo_model(yaml_path, batch_size=16, img_size=640):
+        def train_yolo_model(yaml_path, batch_size=0.8, img_size=640):
             """
             Train a YOLO model on the prepared dataset with optimized accuracy settings.
         
@@ -344,6 +345,9 @@ class YOLOModel(fls.BaseClass):
     
                 # Update a setting
                 settings.update({"mlflow": False})
+
+                if self.multi_scale_training:
+                    batch_size = 8
     
                 results = model.train(
                     data=yaml_path,
@@ -364,6 +368,7 @@ class YOLOModel(fls.BaseClass):
                     weight_decay=self.weight_decay,  # Prevent overfitting
                     dropout= self.dropout,
                     momentum=self.momentum,  # Momentum for better gradient updates
+                    multi_scale = self.multi_scale_training,
                     close_mosaic=self.close_mosaic,  # Disable mosaic augmentation after 10 epochs
                     box = self.box,
                     workers=4,  # Speed up data loading
