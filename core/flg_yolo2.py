@@ -51,12 +51,14 @@ class YOLOModel(fls.BaseClass):
     trust = 4
 
     patience=10
+    use_best_epoch = True # else use last
     lr0=0.001
     lrf=0.01
     cos_lr = True
     weight_decay = 0.0005
     dropout= 0.0
     momentum=0.937
+    
 
     box=7.5
     
@@ -380,7 +382,11 @@ class YOLOModel(fls.BaseClass):
                     best_epoch, best_val_loss = best_epoch_info
                     print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
 
-                model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt'))
+                if self.use_best_epoch:
+                    model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt'))
+                else:
+                    model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/last.pt'))
+                
 
             self.trained_model = model_list
 
@@ -465,7 +471,7 @@ class YOLOModel(fls.BaseClass):
                                 for i_slice in sub_batch_slice_nums:
                                     data_in.append(data.data[i_slice,:,:,None])
                                     data_in[-1] = data_in[-1][:,:,[0,0,0]]
-                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold)
+                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True)
                             for j, result in enumerate(sub_results):
                                 if len(result.boxes) > 0:
                                     for box_idx, confidence in enumerate(result.boxes.conf):
