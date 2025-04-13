@@ -163,8 +163,6 @@ class ThreeStepModel(fls.Model):
     # Internal
     run_to: int = field(init=True, default=0) # 0: run all, 1: stop after creating labels
 
-    TEMP_threshold = 20.
-
     def _train(self, train_data, validation_data):
         self.step1Heatmap.seed = self.seed
         self.step1Heatmap.preprocessor = self.preprocessor
@@ -280,7 +278,7 @@ class ThreeStepModelLabelBased(fls.Model):
         self.step3Output.x_val = 'confidence'
         self.step3Output.y_val = 'confidence'
         self.step3Output.vals = np.linspace(0,1,100)
-        self.step3Output.threshold = 0.45
+        self.step3Output.threshold = 0.25
 
     def _train(self, train_data, validation_data):
         self.step1Labels.seed = self.seed
