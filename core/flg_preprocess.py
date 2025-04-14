@@ -94,9 +94,12 @@ class Preprocessor(fls.BaseClass):
             if self.scale_percentile_clip:
                 img = cp.clip(img, 0., 1.)
 
-        blur_matrix = cp.ones((self.blur_z,1,1), dtype=cp.float16)/self.blur_z
+        print('hi1')
+        blur_matrix = cp.ones((self.blur_z,1), dtype=cp.float16)/self.blur_z
         import cupyx.scipy.signal
-        img = cupyx.scipy.signal.fftconvolve(img, blur_matrix, mode='same')
+        for ii in range(img.shape[2]):
+            img[:,:,ii] = cupyx.scipy.signal.fftconvolve(img[:,:,ii], blur_matrix, mode='same')
+        print('hi2')
 
         # Scale STD
         if self.scale_std:
