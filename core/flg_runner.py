@@ -143,8 +143,8 @@ class ModelRunner(fls.BaseClass):
         self.trained_model = copy.deepcopy(model)
 
         # Infer
-        #if fls.env=='vast':
-        model.run_in_parallel = True
+        if fls.env=='vast':
+            model.run_in_parallel = False
         self.inferred_test_data = model.infer(self.test_data)       
         self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
             
