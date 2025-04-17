@@ -81,14 +81,31 @@ class SelectSingleMotors(fls.BaseClass):
     threshold: float = field(init=True, default = 0.)
     x_val = 'size'
     y_val = 'max_logit'
+    select_on_ratio = False
     vals: object = field(init=True, default_factory = lambda:np.linspace(-10,100,100))
+
+    # Diagnostics
+    precisions = 0
+    recalls = 0
+    scores = 0
 
     def select_motors(self,d):
         d.labels = copy.deepcopy(d.labels_unfiltered)
-        d.labels = d.labels[d.labels[self.y_val]>self.threshold]
+        if self.select_on_ratio:
+            if len(d.labels)>1:
+                all_vals = np.sort(d.labels[self.y_val])
+                val = (all_vals[-1]-all_vals[-2])/all_vals[-1]
+            else:
+                val = 1
+            if val<self.threshold:
+                d.labels = d.labels[0:0]
+        else:
+            d.labels = d.labels[d.labels[self.y_val]>self.threshold]            
+            val = np.max(d.labels[self.y_val])
         if len(d.labels)>0:
             row = np.argmax(d.labels[self.y_val].to_numpy())
-            d.labels = d.labels[row:row+1]        
+            d.labels = d.labels[row:row+1].reset_index()
+            d.labels.at[0, 'value'] = val
 
     def calibrate(self, data, reference_data):
         cs_tp = []
@@ -117,9 +134,9 @@ class SelectSingleMotors(fls.BaseClass):
         plt.pause(0.01)
         
         thresholds_try = self.vals
-        precisions = []
-        recalls = []
-        scores = []
+        self.precisions = []
+        self.recalls = []
+        self.scores = []
         data_try_base = copy.deepcopy(data)
         for d in data_try_base:
             d.labels_unfiltered2 = []
@@ -129,19 +146,19 @@ class SelectSingleMotors(fls.BaseClass):
             for d in data_try:
                 self.select_motors(d)
             score = fls.score_competition_metric(data_try, reference_data)
-            precisions.append(score[0])
-            recalls.append(score[1])
-            scores.append(score[2])
+            self.precisions.append(score[0])
+            self.recalls.append(score[1])
+            self.scores.append(score[2])
             
         plt.figure()
-        plt.plot(thresholds_try,precisions)
-        plt.plot(thresholds_try,recalls)
-        plt.plot(thresholds_try,scores)
+        plt.plot(thresholds_try,self.precisions)
+        plt.plot(thresholds_try,self.recalls)
+        plt.plot(thresholds_try,self.scores)
         plt.xlabel('Threshold')
         plt.ylabel('Value')
         plt.legend(['Precision', 'Recall', 'Score'])
         plt.grid(True)
-        self.threshold = thresholds_try[np.argmax(scores)]
+        self.threshold = thresholds_try[np.argmax(self.scores)]
         plt.pause(0.01)
         
 
@@ -203,6 +220,27 @@ class ThreeStepModel(fls.Model):
         return data
 
 @dataclass
+class SimpleHeatmapModel(fls.Model):
+    step1Heatmap: object = field(init=True, default_factory=flg_unet.UNetModel)
+    threshold: float = field(init=True, default=-np.inf)
+
+    def _train(self, train_data, validation_data):
+        self.step1Heatmap.seed = self.seed
+        self.step1Heatmap.preprocessor = self.preprocessor
+        if self.step1Heatmap.model==0:
+            self.step1Heatmap.train(train_data, validation_data)
+
+    def _infer_single(self,data):   
+        heatmap = self.step1Heatmap.infer(data)
+        if np.max(heatmap)>self.threshold:
+            max_position = np.unravel_index(np.argmax(heatmap), heatmap.shape)
+            d = {'z':max_position[0], 'y':max_position[1], 'x':max_position[2]}
+            data.labels = pd.DataFrame([d])
+        else:
+            data.labels = pd.DataFrame(columns=['z', 'y', 'x'])
+        return data
+            
+@dataclass
 class FindClusters(fls.BaseClass):
     distance_threshold = 100.
     min_confidence = np.nan
@@ -234,9 +272,9 @@ class FindClusters(fls.BaseClass):
             conf_per_model = []
             for i_model in range(self.n_models):
                 this_detections_this_model = this_detections[this_detections['i_model']==i_model]
-                print('------------------')
-                print(this_detections_this_model)
-                print('------------------')
+                #print('------------------')
+                #print(this_detections_this_model)
+                #print('------------------')
                 if len(this_detections_this_model)==0:
                     conf_per_model.append(self.min_confidence)
                 else:
@@ -247,7 +285,9 @@ class FindClusters(fls.BaseClass):
             #print(final_detections)
     
         if len(final_detections)==0:
+            print('FINAL')
             print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model']))
+            print('')
             return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
         else:
             print('FINAL')

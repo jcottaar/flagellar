@@ -465,6 +465,7 @@ class Model(BaseClass):
 
     train_data_selector: object = field(init=True, default_factory = DataSelector)
     preprocessor: object = field(init=True, default = None)
+    ratio_of_motors_allowed: float = field(init=True, default=1.)
 
     def __post_init__(self):
         super().__post_init__()
@@ -514,6 +515,20 @@ class Model(BaseClass):
             t.labels  = pd.DataFrame()
             t.unload()
         test_data = self._infer(test_data)
+
+        all_vals = []
+        for d in test_data:
+            if len(d.labels)==0:
+                all_vals.append(-np.inf)
+            else:
+                all_vals.append(d.labels['value'][0])
+        inds = np.argsort(all_vals)
+        print(np.round(len(inds)*(1-self.ratio_of_motors_allowed)).astype(int))
+        print(len(inds))
+        if self.ratio_of_motors_allowed<1:
+            for ind in inds[:np.round(len(inds)*(1-self.ratio_of_motors_allowed)).astype(int)]:
+                test_data[ind].labels = test_data[ind].labels[0:0]
+        
         for t in test_data:
             t.check_constraints()
         return test_data
