@@ -336,13 +336,17 @@ class YOLOModel(fls.BaseClass):
             train_results = []
             for i_ensemble in range(self.n_ensemble):
                 fls.remove_and_make_dir(yolo_weights_dir)
+                if self.model_name.startswith('yolo'):
+                    model_setup_func = ultralytics.YOLO
+                else:
+                    model_setup_func = ultralytics.RTDETR
                 if self.use_pretrained_weights:         
                     if not fls.env=='kaggle':
-                        model = ultralytics.YOLO(self.model_name + '.pt')
+                        model = model_setup_func(self.model_name + '.pt')
                     else:
-                        model = ultralytics.YOLO('/kaggle/usr/lib/ultralytics_for_offline_install_mine/' + self.model_name + '.pt')
+                        model = model_setup_func('/kaggle/usr/lib/ultralytics_for_offline_install_mine/' + self.model_name + '.pt')
                 else:
-                    model = ultralytics.YOLO(self.model_name + '.yaml')
+                    model = model_setup_func(self.model_name + '.yaml')
     
                 from ultralytics import settings
     

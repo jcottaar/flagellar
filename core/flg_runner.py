@@ -28,6 +28,7 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['blur_z'] = pm(1, lambda r:max(1,1+2*r.integers(0,4)), prep) 
     res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-2,3)).item(), yolo)
     res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(30,71)).item(), yolo)   
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:(r.uniform(0.0005,0.0015)).item(), yolo)  
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>1., use_best_epoch)   
     model_list = ['yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8l', 'rtdetr-l']
     res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], yolo)
