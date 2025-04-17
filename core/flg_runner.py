@@ -22,15 +22,15 @@ def baseline_runner(fast_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
-    res.modifier_dict['n_ensemble'] = pm(4, lambda r:4, yolo)
+    res.modifier_dict['n_ensemble'] = pm(4, lambda r:r.integers(2,5), yolo)
     res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(1.,5.), prep)
     res.modifier_dict['scale_std'] = pm(False, lambda r:r.uniform()>0.8, prep)
     res.modifier_dict['blur_z'] = pm(1, lambda r:max(1,1+2*r.integers(0,4)), prep) 
     res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-2,3)).item(), yolo)
     res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(30,71)).item(), yolo)   
-    res.modifier_dict['lr0'] = pm(0.001, lambda r:(r.uniform(0.0005,0.0015)).item(), yolo)  
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-2.5)), yolo)  
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>1., use_best_epoch)   
-    model_list = ['yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8l', 'rtdetr-l']
+    model_list = ['yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8l']
     res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.2, yolo)
     res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(20,28).item(), yolo)
@@ -79,8 +79,8 @@ class ModelRunner(fls.BaseClass):
     base_model=0
     modifier_dict: dict = field(init=True, default_factory=dict)
     use_missing_value = False
-    N_test_positive = 300
-    N_test_negative = 50
+    N_test_positive = 150
+    N_test_negative = 10
     include_test_data_in_train = True
     train_part: slice = field(init=True, default_factory = lambda:slice(None,None,None))
     test_part: slice = field(init=True, default_factory = lambda:slice(None,None,None))
@@ -119,7 +119,7 @@ class ModelRunner(fls.BaseClass):
         self.test_data = test_data[self.test_part]
         print(len(self.train_data), len(self.test_data))
 
-        if include_test_data_in_train:
+        if self.include_test_data_in_train:
             self.train_data = self.train_data + self.test_data
         
         # Set up modified model
