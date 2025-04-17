@@ -50,6 +50,10 @@ class YOLOModel(fls.BaseClass):
     box_size = 24
     trust = 4
 
+    alternative_slice_selection = False
+    trust_expanded = 4
+    forbidden_range = 20 # if there is a motor inside forbidden_range but outside trust_expanded in z, discard this slice
+
     patience=10
     use_best_epoch = True # else use last
     lr0=0.001
