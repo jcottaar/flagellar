@@ -175,7 +175,7 @@ class YOLOModel(fls.BaseClass):
                         for i_slice in range(data.data_shape[0]):
                             in_any_range = False
                             in_forbidden_range = False
-                            for i_row in len(data.labels):
+                            for i_row in range(len(data.labels)):
                                 dist = np.abs(data.labels['z'][i_row]-i_slice)
                                 if np.abs(dist)<=self.trust:
                                     in_any_range = True
@@ -183,31 +183,31 @@ class YOLOModel(fls.BaseClass):
                                     in_forbidden_range = True
                             if in_any_range and not in_forbidden_range:
                                 slices_to_do.append(i_slice)
-                        print(slices_to_do)
-
-                    dd = copy.deepcopy(d)
-                    self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
-                    for i_z,z in enumerate(dd.slices_present):
-                        normalized_img = dd.data[i_z,:,:]
-                        dest_filename = f"{d.name}_z{z:04d}.jpg"
-                        dest_path = os.path.join(images_dir, dest_filename)
-                        Image.fromarray(normalized_img).save(dest_path)                        
-
-                        label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
-                        with open(label_path, 'w') as f:
-                            for i_row in len(data.labels):
-                                dist = np.abs(data.labels['z'][i_row]-z)
-                                if np.abs(dist)<=self.trust_expanded:
-                                    x_center = data.labels['x'][i_row]
-                                    y_center = data.labels['y'][i_row]
-                                    x_center_norm = x_center / img_width
-                                    y_center_norm = y_center / img_height
-                                    box_width_norm = self.box_size / img_width
-                                    box_height_norm = self.box_size / img_height
-                                    img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
-                                    f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
-                                else:
-                                    print('rejected')
+                        dd = copy.deepcopy(data)
+                        self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
+                        for i_z,z in enumerate(dd.slices_present):
+                            normalized_img = dd.data[i_z,:,:]
+                            dest_filename = f"{data.name}_z{z:04d}.jpg"
+                            dest_path = os.path.join(images_dir, dest_filename)
+                            Image.fromarray(normalized_img).save(dest_path)                        
+    
+                            label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
+                            with open(label_path, 'w') as f:
+                                for i_row in range(len(data.labels)):
+                                    dist = np.abs(data.labels['z'][i_row]-z)
+                                    if np.abs(dist)<=self.trust_expanded:
+                                        x_center = data.labels['x'][i_row]
+                                        y_center = data.labels['y'][i_row]
+                                        img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
+                                        x_center_norm = x_center / img_width
+                                        y_center_norm = y_center / img_height
+                                        box_width_norm = self.box_size / img_width
+                                        box_height_norm = self.box_size / img_height
+                                        img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
+                                        f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
+                                    else:
+                                        print('rejected')
+                    return 0,0
                 else:
                     motor_counts = []
                     for d in data_list:
