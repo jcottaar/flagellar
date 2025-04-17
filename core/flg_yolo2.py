@@ -183,6 +183,8 @@ class YOLOModel(fls.BaseClass):
                                     in_forbidden_range = True
                             if in_any_range and not in_forbidden_range:
                                 slices_to_do.append(i_slice)
+                        if len(slices_to_do)==0:
+                            continue
                         dd = copy.deepcopy(data)
                         self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
                         for i_z,z in enumerate(dd.slices_present):
@@ -205,8 +207,6 @@ class YOLOModel(fls.BaseClass):
                                         box_height_norm = self.box_size / img_height
                                         img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                                         f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
-                                    else:
-                                        print('rejected')
                     return 0,0
                 else:
                     motor_counts = []

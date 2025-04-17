@@ -81,6 +81,7 @@ class ModelRunner(fls.BaseClass):
     use_missing_value = False
     N_test_positive = 300
     N_test_negative = 50
+    include_test_data_in_train = True
     train_part: slice = field(init=True, default_factory = lambda:slice(None,None,None))
     test_part: slice = field(init=True, default_factory = lambda:slice(None,None,None))
     train_in_subprocess = True
@@ -117,6 +118,9 @@ class ModelRunner(fls.BaseClass):
         self.train_data = train_data[self.train_part]
         self.test_data = test_data[self.test_part]
         print(len(self.train_data), len(self.test_data))
+
+        if include_test_data_in_train:
+            self.train_data = self.train_data + self.test_data
         
         # Set up modified model
         rng = np.random.default_rng(seed=self.seed)
