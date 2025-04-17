@@ -318,7 +318,7 @@ class ThreeStepModelLabelBased(fls.Model):
         self.step3Output.x_val = 'confidence'
         self.step3Output.y_val = 'confidence'
         self.step3Output.vals = np.linspace(0,1,100)
-        self.step3Output.threshold = 0.25
+        self.step3Output.threshold = 0.
 
     def _train(self, train_data, validation_data):
         self.step1Labels.seed = self.seed

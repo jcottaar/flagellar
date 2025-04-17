@@ -87,8 +87,8 @@ os.makedirs(h5py_cache_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 os.makedirs(result_dir, exist_ok=True)
 profiling = False
-if is_submission:
-    profiling = False
+#if is_submission:
+#    profiling = False
 
 # How many workers is optimal for parallel pool?
 def recommend_n_workers():
@@ -523,8 +523,6 @@ class Model(BaseClass):
             else:
                 all_vals.append(d.labels['value'][0])
         inds = np.argsort(all_vals)
-        print(np.round(len(inds)*(1-self.ratio_of_motors_allowed)).astype(int))
-        print(len(inds))
         if self.ratio_of_motors_allowed<1:
             for ind in inds[:np.round(len(inds)*(1-self.ratio_of_motors_allowed)).astype(int)]:
                 test_data[ind].labels = test_data[ind].labels[0:0]

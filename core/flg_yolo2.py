@@ -87,7 +87,7 @@ class YOLOModel(fls.BaseClass):
 
 
     # infer
-    confidence_threshold = 0.01
+    confidence_threshold = 0.
     relative_confidence_threshold = 0.2
     concentration = 1
 
@@ -441,7 +441,7 @@ class YOLOModel(fls.BaseClass):
             return images
         
        
-        
+        #@fls.profile_each_line
         def process_tomogram(tomo_id, model, index=0, total=1):
             """
             Process a single tomogram and return the most confident motor detection.
@@ -481,9 +481,14 @@ class YOLOModel(fls.BaseClass):
                                     data_in[-1] = data_in[-1][:,:,[0,0,0]]
                                 sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True)
                             for j, result in enumerate(sub_results):
+                                result = result.cpu()
+                                all_conf = result.boxes.conf.numpy()#np.array([b.conf for b in result.boxes])
+                                if len(all_conf)==0: continue
+                                todo = np.logical_and(all_conf>self.confidence_threshold, all_conf>self.relative_confidence_threshold*np.max(all_conf))
                                 if len(result.boxes) > 0:
-                                    for box_idx, confidence in enumerate(result.boxes.conf):
-                                        if confidence >= self.confidence_threshold:
+                                    for box_idx in range(len(result.boxes.conf)):
+                                        #if confidence >= self.confidence_threshold:
+                                        if todo[box_idx]:
                                             x1, y1, x2, y2 = result.boxes.xyxy[box_idx].cpu().numpy()
                                             x_center = (x1 + x2) / 2
                                             y_center = (y1 + y2) / 2
@@ -491,7 +496,7 @@ class YOLOModel(fls.BaseClass):
                                                 'z': round(data.slices_present[sub_batch_slice_nums[j]]),
                                                 'y': round(y_center),
                                                 'x': round(x_center),
-                                                'confidence': float(confidence),
+                                                'confidence': float(all_conf[box_idx]),
                                                 'i_model': i_model
                                             })
                     torch.cuda.synchronize()
@@ -499,7 +504,7 @@ class YOLOModel(fls.BaseClass):
             #if len(all_detections)==0:
             #    all_detections = pd.DataFrame(all_detections, column = ['z', 'y', 'x', 'confidence', 'i_model'])
             all_detections = pd.DataFrame(all_detections, columns = ['z', 'y', 'x', 'confidence', 'i_model'])
-            all_detections = all_detections[all_detections['confidence']>self.relative_confidence_threshold*np.max(all_detections['confidence'])]
+            #all_detections = all_detections[all_detections['confidence']>self.relative_confidence_threshold*np.max(all_detections['confidence'])]
             #final_detections = perform_3d_nms(all_detections)
             #final_detections.sort(key=lambda x: x['confidence'], reverse=True)
 
