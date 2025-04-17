@@ -51,7 +51,7 @@ class YOLOModel(fls.BaseClass):
     trust = 4
 
     alternative_slice_selection = False
-    trust_expanded = 4
+    trust_expanded = 6
     forbidden_range = 20 # if there is a motor inside forbidden_range but outside trust_expanded in z, discard this slice
 
     patience=10
@@ -168,47 +168,89 @@ class YOLOModel(fls.BaseClass):
             
             # Helper function to process a list of tomograms
             def process_tomogram_set(data_list, images_dir, labels_dir, set_name):
-                motor_counts = []
-                for d in data_list:
-                     #Get motor annotations for the current tomogram
-                    tomo_motors = d.labels
-                    for _, motor in tomo_motors.iterrows():                        
-                        motor_counts.append(
-                            (d, 
-                             int(motor['z']), 
-                             int(motor['y']), 
-                             int(motor['x']),
-                             d.data_shape[0])
-                        )
-                
-                print(f"Will process approximately {len(motor_counts) * (2 * trust + 1)} slices for {set_name}")
-                processed_slices = 0
-                
-                # Loop over each motor annotation
-                for d, z_center, y_center, x_center, z_max in tqdm(motor_counts, desc=f"Processing {set_name} motors"):
-                    dd=copy.deepcopy(d)
-                    z_min = max(0, z_center - trust)
-                    z_max_bound = min(z_max - 1, z_center + trust)
-                    self.preprocessor.load_and_preprocess(dd, desired_original_slices = np.arange(z_min,z_max_bound+1).tolist())
-                    for z in range(z_min, z_max_bound + 1):
-                        normalized_img = dd.data[z-z_min,:,:]                                   
-                        dest_filename = f"{d.name}_z{z:04d}_y{y_center:04d}_x{x_center:04d}.jpg"
+                if self.alternative_slice_selection:
+                    assert self.trust_expanded >= self.trust
+                    for data in tqdm(data_list):
+                        slices_to_do = []
+                        for i_slice in range(data.data_shape[0]):
+                            in_any_range = False
+                            in_forbidden_range = False
+                            for i_row in len(data.labels):
+                                dist = np.abs(data.labels['z'][i_row]-i_slice)
+                                if np.abs(dist)<=self.trust:
+                                    in_any_range = True
+                                if np.abs(dist)>=self.trust_expanded and np.abs(dist)<=self.forbidden_range:
+                                    in_forbidden_range = True
+                            if in_any_range and not in_forbidden_range:
+                                slices_to_do.append(i_slice)
+                        print(slices_to_do)
+
+                    dd = copy.deepcopy(d)
+                    self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
+                    for i_z,z in enumerate(dd.slices_present):
+                        normalized_img = dd.data[i_z,:,:]
+                        dest_filename = f"{d.name}_z{z:04d}.jpg"
                         dest_path = os.path.join(images_dir, dest_filename)
-                        Image.fromarray(normalized_img).save(dest_path)
-                        
-                        # Prepare YOLO bounding box annotation (normalized values)
-                        img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
-                        x_center_norm = x_center / img_width
-                        y_center_norm = y_center / img_height
-                        box_width_norm = self.box_size / img_width
-                        box_height_norm = self.box_size / img_height
+                        Image.fromarray(normalized_img).save(dest_path)                        
+
                         label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
                         with open(label_path, 'w') as f:
-                            f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
-                        
-                        processed_slices += 1                    
-                
-                return processed_slices, len(motor_counts)
+                            for i_row in len(data.labels):
+                                dist = np.abs(data.labels['z'][i_row]-z)
+                                if np.abs(dist)<=self.trust_expanded:
+                                    x_center = data.labels['x'][i_row]
+                                    y_center = data.labels['y'][i_row]
+                                    x_center_norm = x_center / img_width
+                                    y_center_norm = y_center / img_height
+                                    box_width_norm = self.box_size / img_width
+                                    box_height_norm = self.box_size / img_height
+                                    img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
+                                    f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
+                                else:
+                                    print('rejected')
+                else:
+                    motor_counts = []
+                    for d in data_list:
+                         #Get motor annotations for the current tomogram
+                        tomo_motors = d.labels
+                        for _, motor in tomo_motors.iterrows():                        
+                            motor_counts.append(
+                                (d, 
+                                 int(motor['z']), 
+                                 int(motor['y']), 
+                                 int(motor['x']),
+                                 d.data_shape[0])
+                            )
+                    
+                    print(f"Will process approximately {len(motor_counts) * (2 * trust + 1)} slices for {set_name}")
+                    processed_slices = 0
+                    
+                    # Loop over each motor annotation
+                    for d, z_center, y_center, x_center, z_max in tqdm(motor_counts, desc=f"Processing {set_name} motors"):
+                        dd=copy.deepcopy(d)
+                        z_min = max(0, z_center - trust)
+                        z_max_bound = min(z_max - 1, z_center + trust)
+                        self.preprocessor.load_and_preprocess(dd, desired_original_slices = np.arange(z_min,z_max_bound+1).tolist())
+                        for z in range(z_min, z_max_bound + 1):
+                            normalized_img = dd.data[z-z_min,:,:]                                   
+                            dest_filename = f"{d.name}_z{z:04d}_y{y_center:04d}_x{x_center:04d}.jpg"
+                            dest_path = os.path.join(images_dir, dest_filename)
+                            Image.fromarray(normalized_img).save(dest_path)
+                            
+                            # Prepare YOLO bounding box annotation (normalized values)
+                            img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
+                            x_center_norm = x_center / img_width
+                            y_center_norm = y_center / img_height
+                            box_width_norm = self.box_size / img_width
+                            box_height_norm = self.box_size / img_height
+
+                            label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
+                            with open(label_path, 'w') as f:
+                                f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
+                            
+                            processed_slices += 1                    
+                    
+                    return processed_slices, len(motor_counts)
             
             # Process training tomograms
             train_slices, train_motors = process_tomogram_set(train_data_filtered, yolo_images_train, yolo_labels_train, "training")
@@ -321,7 +363,7 @@ class YOLOModel(fls.BaseClass):
             
             return best_epoch, best_val_loss
 
-        def train_yolo_model(yaml_path, batch_size=0.8, img_size=640):
+        def train_yolo_model(yaml_path, batch_size=12, img_size=640):
             """
             Train a YOLO model on the prepared dataset with optimized accuracy settings.
         
@@ -358,7 +400,7 @@ class YOLOModel(fls.BaseClass):
                 settings.update({"mlflow": False})
 
                 if self.multi_scale_training:
-                    batch_size = 8
+                    batch_size = 6
     
                 results = model.train(
                     data=yaml_path,
