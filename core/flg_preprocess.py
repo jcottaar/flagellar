@@ -89,13 +89,15 @@ class Preprocessor(fls.BaseClass):
             conv_matrix = cp.ones((moving_size,moving_size), dtype=img.dtype)
             conv_matrix = conv_matrix/np.sum(conv_matrix)
             for ii in range(img.shape[0]):
-                moving_mean = cupyx.scipy.signal.fftconvolve(img[ii,...], conv_matrix, mode='same')                      
+                moving_mean = cupyx.scipy.signal.fftconvolve(img[ii,...], conv_matrix, mode='same')  
+                assert cp.max(moving_mean)>0
                 moving_mean = moving_mean[pad_size:-pad_size,pad_size:-pad_size]
                 moving_mean = cp.pad(moving_mean, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
                 if not self.scale_also_moving_std:
                     img[ii,...] = img[ii,...] - moving_mean
                 else:
                     moving_mean_of_squared = cupyx.scipy.signal.fftconvolve((img[ii,...].astype(cp.float32))**2, conv_matrix.astype(cp.float32), mode='same')            
+                    assert cp.max(moving_mean_of_squared)>0
                     moving_mean_of_squared = moving_mean_of_squared[pad_size:-pad_size,pad_size:-pad_size]
                     moving_mean_of_squared = cp.pad(moving_mean_of_squared, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
                     moving_std = moving_mean_of_squared - moving_mean**2
