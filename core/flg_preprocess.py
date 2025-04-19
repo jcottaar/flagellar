@@ -38,7 +38,7 @@ class Preprocessor(fls.BaseClass):
     scale_std_clip_value = 3.
 
     scale_moving_average = False
-    scale_also_moving_std = True
+    scale_also_moving_std = False
     moving_ratio = 0.2
 
     # Blurring
@@ -57,7 +57,7 @@ class Preprocessor(fls.BaseClass):
         fls.claim_gpu('cupy')
         while True:
             try:
-                img = cp.array(data.data).astype(cp.float16)
+                img = cp.array(data.data).astype(cp.float32)
                 break
             except:
                 fls.claim_gpu('')
@@ -86,33 +86,35 @@ class Preprocessor(fls.BaseClass):
             moving_size = np.round(np.sqrt(img.shape[1]*img.shape[2])*self.moving_ratio).astype(int)
             pad_size = moving_size//2
             #print(moving_size)
-            conv_matrix = cp.ones((moving_size,moving_size), dtype=img.dtype)
+            conv_matrix = cp.ones((moving_size,moving_size), dtype=cp.float32)
             conv_matrix = conv_matrix/np.sum(conv_matrix)
             for ii in range(img.shape[0]):
-                moving_mean = cupyx.scipy.signal.fftconvolve(img[ii,...], conv_matrix, mode='same')  
+                arr = img[ii,...]
+                moving_mean = cupyx.scipy.signal.fftconvolve(arr, conv_matrix, mode='same')  
                 assert cp.max(moving_mean)>0
                 moving_mean = moving_mean[pad_size:-pad_size,pad_size:-pad_size]
                 moving_mean = cp.pad(moving_mean, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
                 if not self.scale_also_moving_std:
-                    img[ii,...] = img[ii,...] - moving_mean
+                    img[ii,...] = (arr - moving_mean)
                 else:
-                    moving_mean_of_squared = cupyx.scipy.signal.fftconvolve((img[ii,...].astype(cp.float32))**2, conv_matrix.astype(cp.float32), mode='same')            
+                    moving_mean_of_squared = cupyx.scipy.signal.fftconvolve(arr**2, conv_matrix, mode='same')            
                     assert cp.max(moving_mean_of_squared)>0
                     moving_mean_of_squared = moving_mean_of_squared[pad_size:-pad_size,pad_size:-pad_size]
                     moving_mean_of_squared = cp.pad(moving_mean_of_squared, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
                     moving_std = moving_mean_of_squared - moving_mean**2
-                    img[ii,...] = (img[ii,...] - moving_mean)/moving_std
+                    img[ii,...] = ((arr - moving_mean)/moving_std)
                     
                     
 
         # Scale STD
         if self.scale_std:
             mean_per_slice = cp.mean(img,axis=(1,2))
-            std_per_slice = cp.std(img.astype(cp.float32),axis=(1,2)).astype(cp.float16)
-            img = (img - mean_per_slice[:,None,None]) / std_per_slice[:,None,None]
-            if not np.isnan(self.scale_std_clip_value):
-                img = (img+self.scale_std_clip_value)/(2*self.scale_std_clip_value)
-                img = cp.clip(img, 0., 1.)     
+            std_per_slice = cp.std(img,axis=(1,2)).astype(cp.float16)
+            for ii in range(img.shape[0]):
+                img[ii,...] = (img[ii,...] - mean_per_slice[ii,None,None]) / std_per_slice[ii,None,None]
+                if not np.isnan(self.scale_std_clip_value):
+                    img[ii,...] = (img[ii,...]+self.scale_std_clip_value)/(2*self.scale_std_clip_value)
+                    img[ii,...] = cp.clip(img[ii,...], 0., 1.)     
             #for ii in range(img.shape[0]):
             #    img[ii,:,:,] = (img[ii,:,:,]-mean_list[ii])/std_list[ii]
                 
