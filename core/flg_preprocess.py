@@ -83,22 +83,22 @@ class Preprocessor(fls.BaseClass):
 
         # Moving average/STD scaling
         if self.scale_moving_average:
-            moving_size = np.round(np.sqrt([img.shape[1],img.shape[2]])*self.moving_ratio).astype(int)
+            moving_size = np.round(np.sqrt(img.shape[1]*img.shape[2])*self.moving_ratio).astype(int)
             pad_size = moving_size//2
             #print(moving_size)
-            conv_matrix = cp.ones((moving_size[0],moving_size[1]), dtype=img.dtype)
+            conv_matrix = cp.ones((moving_size,moving_size), dtype=img.dtype)
             conv_matrix = conv_matrix/np.sum(conv_matrix)
             for ii in range(img.shape[0]):
                 moving_mean = cupyx.scipy.signal.fftconvolve(img[ii,...], conv_matrix, mode='same')                      
-                moving_mean = moving_mean[pad_size[0]:-pad_size[0],pad_size[1]:-pad_size[1]]
-                moving_mean = cp.pad(moving_mean, ((pad_size[0],pad_size[0]),(pad_size[1],pad_size[1])), mode='edge')
+                moving_mean = moving_mean[pad_size:-pad_size,pad_size:-pad_size]
+                moving_mean = cp.pad(moving_mean, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
                 if not self.scale_also_moving_std:
                     img[ii,...] = img[ii,...] - moving_mean
                 else:
                     moving_mean_of_squared = cupyx.scipy.signal.fftconvolve((img[ii,...].astype(cp.float32))**2, conv_matrix.astype(cp.float32), mode='same')            
-                    moving_mean_of_squared = moving_mean_of_squared[pad_size[0]:-pad_size[0],pad_size[1]:-pad_size[1]]
-                    moving_mean_of_squared = cp.pad(moving_mean_of_squared, ((pad_size[0],pad_size[0]),(pad_size[1],pad_size[1])), mode='edge')
-                    moving_std = (moving_mean_of_squared - moving_mean**2).astype(cp.float16)
+                    moving_mean_of_squared = moving_mean_of_squared[pad_size:-pad_size,pad_size:-pad_size]
+                    moving_mean_of_squared = cp.pad(moving_mean_of_squared, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
+                    moving_std = moving_mean_of_squared - moving_mean**2
                     img[ii,...] = (img[ii,...] - moving_mean)/moving_std
                     
                     

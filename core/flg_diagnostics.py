@@ -73,7 +73,7 @@ def animate_labels_full_slice(data_list, z_size):
     for d in data_list:
         if len(d.labels)>0:
             z = np.round(d.labels['z'][0].astype(int))
-            #z = 1
+            z = 1
             z_min = max(0,z-z_size)
             z_max = min(d.data_shape[0], z+z_size+1)
             desired_slices = list(np.arange(z_min,z_max))
