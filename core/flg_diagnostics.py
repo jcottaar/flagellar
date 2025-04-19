@@ -67,13 +67,17 @@ def animate_3d_matrix_no_rescale(animation_arr, fps=20, figsize=(6,6), axis_off=
 
 def animate_labels_full_slice(data_list, z_size):
 
+    #print('z0 2x')
+    #z_size = 1
     slices=[]
     for d in data_list:
         if len(d.labels)>0:
             z = np.round(d.labels['z'][0].astype(int))
+            #z = 1
             z_min = max(0,z-z_size)
             z_max = min(d.data_shape[0], z+z_size+1)
             desired_slices = list(np.arange(z_min,z_max))
+            #print(desired_slices)
             dat = copy.deepcopy(d)            
             prep = flg_preprocess.Preprocessor()
             prep.scale_percentile = True
@@ -82,6 +86,7 @@ def animate_labels_full_slice(data_list, z_size):
             prep.resize = True
             prep.resize_target = 320
             prep.return_uint8 = True
+            #prep.moving_ratio = 0.3
             prep.load_and_preprocess(dat, desired_original_slices = desired_slices)
             mat = np.pad(dat.data, ((0,0), (0,max(0,320-dat.data.shape[1])), (0,max(0,320-dat.data.shape[2]))))
 
