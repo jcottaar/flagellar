@@ -103,6 +103,7 @@ def test_yolo(update_reference=False):
     model.seed = 0
     model.step1Labels.n_ensemble = 2
     model.step1Labels.n_epochs = 3
+    model.step1Labels.img_size = 320
     model.step1Labels.alternative_slice_selection = True
     model.train(train_data[1:150], train_data[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)

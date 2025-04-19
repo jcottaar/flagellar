@@ -6,6 +6,7 @@ matplotlib.rcParams['animation.embed_limit'] = 1000
 import flg_numerics
 import numpy as np
 import copy
+import flg_preprocess
 
 
 def animate_3d_matrix(animation_arr, fps=20, figsize=(6,6), axis_off=True):
@@ -36,6 +37,78 @@ def animate_3d_matrix(animation_arr, fps=20, figsize=(6,6), axis_off=True):
         
     return anim
 
+def animate_3d_matrix_no_rescale(animation_arr, fps=20, figsize=(6,6), axis_off=True):
+
+    animation_arr= copy.deepcopy(animation_arr[...])
+    
+    # Initialise plot
+    fig = plt.figure(figsize=figsize)  # if size is too big then gif gets truncated
+
+    im = plt.imshow(animation_arr[0], cmap='bone')    
+    plt.clim([0, 255])
+    if axis_off:
+        plt.axis('off')
+    #plt.title(f"{tomo_id}", fontweight="bold")
+
+    #min_val = np.percentile(animation_arr, 2)
+    #max_val = np.percentile(animation_arr,98)
+    #animation_arr = (animation_arr-min_val)/(max_val-min_val)
+    # Load next frame
+    def animate_func(i):
+        im.set_data(animation_arr[i])
+        #plt.clim([0, 1])
+        return [im]
+    plt.close()
+    
+    # Animation function
+    anim = animation.FuncAnimation(fig, animate_func, frames = animation_arr.shape[0], interval = 1000//fps, blit=True)
+        
+    return anim
+
+def animate_labels_full_slice(data_list, z_size):
+
+    slices=[]
+    for d in data_list:
+        if len(d.labels)>0:
+            z = np.round(d.labels['z'][0].astype(int))
+            z_min = max(0,z-z_size)
+            z_max = min(d.data_shape[0], z+z_size+1)
+            desired_slices = list(np.arange(z_min,z_max))
+            dat = copy.deepcopy(d)            
+            prep = flg_preprocess.Preprocessor()
+            prep.scale_percentile = True
+            prep.scale_std = True
+            prep.scale_std_clip_value = 2.
+            prep.resize = True
+            prep.resize_target = 320
+            prep.return_uint8 = True
+            prep.load_and_preprocess(dat, desired_original_slices = desired_slices)
+            mat = np.pad(dat.data, ((0,0), (0,max(0,320-dat.data.shape[1])), (0,max(0,320-dat.data.shape[2]))))
+
+            dat = copy.deepcopy(d)          
+            prep2 = prep
+            #prep2.scale_std = False
+            prep2.scale_moving_average = True
+            prep2.scale_also_moving_std = False
+            #prep2.scale_std_clip_value=2.
+            prep2.load_and_preprocess(dat, desired_original_slices = desired_slices)
+            mat2 = np.pad(dat.data, ((0,0), (0,max(0,320-dat.data.shape[1])), (0,max(0,320-dat.data.shape[2]))))
+
+            dat = copy.deepcopy(d)          
+            prep2 = prep
+            #prep2.scale_std = False
+            prep2.scale_moving_average = True
+            prep2.scale_also_moving_std = True
+            #prep2.scale_std_clip_value=2.
+            prep2.load_and_preprocess(dat, desired_original_slices = desired_slices)
+            mat3 = np.pad(dat.data, ((0,0), (0,max(0,320-dat.data.shape[1])), (0,max(0,320-dat.data.shape[2]))))
+
+            mat4 = np.concatenate((mat, mat2, mat3),axis=2)
+            slices.append(np.mean(mat4,axis=0))
+    mat_combined = np.stack(slices)
+    
+    return animate_3d_matrix_no_rescale(mat_combined,figsize=(12,4), fps=5)
+    
 def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False, animate=True):
     mat = flg_numerics.collect_patches(data_list, np.array(sizes),normalize_slices=normalize_slices)[0]
     mat = np.nansum(mat,axis=1)[:,np.newaxis,:,:]    
