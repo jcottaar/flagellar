@@ -529,7 +529,7 @@ class YOLOModel(fls.BaseClass):
                                 for i_slice in sub_batch_slice_nums:
                                     data_in.append(data.data[i_slice,:,:,None])
                                     data_in[-1] = data_in[-1][:,:,[0,0,0]]
-                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True)
+                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True, imgsz=self.img_size)
                             for j, result in enumerate(sub_results):
                                 result = result.cpu()
                                 all_conf = result.boxes.conf.numpy()#np.array([b.conf for b in result.boxes])

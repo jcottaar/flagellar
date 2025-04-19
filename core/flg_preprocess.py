@@ -38,7 +38,7 @@ class Preprocessor(fls.BaseClass):
     scale_std_clip_value = 3.
 
     scale_moving_average = False
-    scale_also_moving_std = False
+    scale_also_moving_std = True
     moving_ratio = 0.2
 
     # Blurring
