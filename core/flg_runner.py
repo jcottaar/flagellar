@@ -22,21 +22,22 @@ def baseline_runner(fast_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
-    res.modifier_dict['n_ensemble'] = pm(4, lambda r:r.integers(2,5), yolo)
-    res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(1.,5.), prep)
-    res.modifier_dict['scale_std'] = pm(False, lambda r:r.uniform()>0., prep)
-    res.modifier_dict['scale_moving_average'] = pm(False, lambda r:r.uniform()>0., prep)
-    res.modifier_dict['moving_ratio'] = pm(0.2, lambda r:r.uniform(0.2,0.2), prep)
+    res.modifier_dict['n_ensemble'] = pm(4, lambda r:r.integers(1,4), yolo)
+    res.modifier_dict['scale_approach'] = pm(1, lambda r:r.integers(0,4), set_scale_approach)
+    res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(3.,5.), prep)    
+    res.modifier_dict['moving_ratio'] = pm(0.2, lambda r:r.uniform(0.1,0.3), prep)
+    res.modifier_dict['scale_std_clip_value'] = pm(3., lambda r:r.uniform(2.,3.), prep)
     res.modifier_dict['blur_z'] = pm(1, lambda r:max(1,1+2*r.integers(0,4)), prep) 
     res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-2,3)).item(), yolo)
-    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(30,71)).item(), yolo)   
-    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-2.5)), yolo)  
+    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,71)).item(), yolo)   
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-4,-2.75)), yolo)  
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>1., use_best_epoch)   
-    model_list = ['yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8l']
+    model_list = ['yolov8s', 'yolov8m', 'yolov8l', 'yolov9s', 'yolov9m', 'yolov10s', 'yolov10m', 'yolo11s', 
+                 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m']
     res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.2, yolo)
     res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(20,28).item(), yolo)
-    res.modifier_dict['trust'] = pm(4, lambda r:r.integers(3,6).item(), yolo)
+    res.modifier_dict['trust'] = pm(4, lambda r:r.integers(1,6).item(), yolo)
     res.modifier_dict['multi_scale_training'] = pm(False, lambda r:r.uniform()>1., yolo)   
     res.modifier_dict['fix_norm_bug'] = pm(False, lambda r:r.uniform()>0., yolo)
     res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0000,0.0006), yolo)
@@ -197,3 +198,16 @@ def use_best_epoch(model, name, value):
         model.step1Labels.use_best_epoch = value
         if not model.step1Labels.use_best_epoch:
             model.step1Labels.patience = 0
+
+def set_scale_approach(model, name, value):
+    model.step1Labels.preprocessor.scale_std = False
+    model.step1Labels.preprocessor.scale_moving_average = False
+    model.step1Labels.preprocessor.scale_also_moving_std = False
+    if value>=1:
+        model.step1Labels.preprocessor.scale_std = True
+    if value>=2:
+        model.step1Labels.preprocessor.scale_moving_average = True
+    if value>=3:
+        model.step1Labels.preprocessor.scale_also_moving_std = True
+            
+        
