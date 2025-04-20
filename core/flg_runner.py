@@ -98,7 +98,7 @@ class ModelRunner(fls.BaseClass):
     train_data=0
     test_data=0
     inferred_test_data=0     
-    cv_score = np.nan
+    cv_score = (np.nan,np.nan,np.nan)
     exception = 0
             
     def run(self):
@@ -151,7 +151,7 @@ class ModelRunner(fls.BaseClass):
             else:
                 model.train(self.train_data, self.test_data)
             self.trained_model = copy.deepcopy(model)
-    
+
             # Infer
             if fls.env=='vast':
                 model.run_in_parallel = False
