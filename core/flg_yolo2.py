@@ -214,15 +214,12 @@ class YOLOModel(fls.BaseClass):
                                         img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                                         f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
                             neg_slice_counter += self.negative_slice_ratio
-                        print(neg_slice_counter)
                         while neg_slice_counter>=1:
                             while True:
                                 data_ind = neg_slice_selector.integers(0,len(data_list))
                                 if len(data_list[data_ind].labels)==0:
                                     break
-                            print(data_list[data_ind].data_shape[0])
                             i_z = neg_slice_selector.integers(0,data_list[data_ind].data_shape[0])
-                            print(i_z)
                             ddd = copy.deepcopy(data_list[data_ind])
                             self.preprocessor.load_and_preprocess(ddd, desired_original_slices = [i_z])
                             normalized_img = ddd.data[0,:,:]
