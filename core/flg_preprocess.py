@@ -72,8 +72,8 @@ class Preprocessor(fls.BaseClass):
                 perc_low = cp.percentile(img[ii,:,:], self.scale_percentile_value)
                 perc_high = cp.percentile(img[ii,:,:], 100-self.scale_percentile_value)
                 img[ii,:,:] = (img[ii,:,:]-perc_low)/(perc_high-perc_low)
-            if self.scale_percentile_clip:
-                img = cp.clip(img, 0., 1.)
+                if self.scale_percentile_clip:
+                    img[ii,:,:] = cp.clip(img[ii,:,:], 0., 1.)
 
         blur_matrix = cp.ones((self.blur_z,1), dtype=cp.float16)/self.blur_z
         import cupyx.scipy.signal
