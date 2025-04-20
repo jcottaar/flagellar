@@ -143,7 +143,8 @@ class Preprocessor(fls.BaseClass):
         # Cast to uint8
         if self.return_uint8:
             if self.scale_percentile:
-                img = (255*img).astype(cp.uint8)
+                img *= 255
+                img = img.astype(cp.uint8)
             else:
                 img = (img).astype(cp.uint8)
 
