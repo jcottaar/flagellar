@@ -49,6 +49,7 @@ class YOLOModel(fls.BaseClass):
     fix_norm_bug = False
     box_size = 24
     trust = 4
+    negative_slice_ratio = 0.
 
     alternative_slice_selection = False
     trust_expanded = 6
@@ -154,14 +155,16 @@ class YOLOModel(fls.BaseClass):
                 dict: A summary containing dataset statistics and file paths.
             """
 
-            train_data_filtered = []
-            for d in train_data:
-                if len(d.labels)>0:
-                    train_data_filtered.append(d)
-            validation_data_filtered = []
-            for d in validation_data:
-                if len(d.labels)>0:
-                    validation_data_filtered.append(d)
+            #train_data_filtered = []
+            #for d in train_data:
+            #    if len(d.labels)>0:
+            #        train_data_filtered.append(d)
+            #validation_data_filtered = []
+            #for d in validation_data:
+            #    if len(d.labels)>0:
+            #        validation_data_filtered.append(d)
+            train_data_filtered = copy.deepcopy(train_data)
+            validation_data_filtered = copy.deepcopy(validation_data)
 
             # Set train and test
             np.random.shuffle(train_data_filtered)
@@ -169,6 +172,9 @@ class YOLOModel(fls.BaseClass):
             # Helper function to process a list of tomograms
             def process_tomogram_set(data_list, images_dir, labels_dir, set_name):
                 if self.alternative_slice_selection:
+                    neg_slice_counter = 0.
+                    neg_ind = 0
+                    neg_slice_selector = np.random.default_rng(seed=self.seed)
                     assert self.trust_expanded >= self.trust
                     for data in tqdm(data_list):
                         slices_to_do = []
@@ -207,6 +213,27 @@ class YOLOModel(fls.BaseClass):
                                         box_height_norm = self.box_size / img_height
                                         img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                                         f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
+                            neg_slice_counter += self.negative_slice_ratio
+                        print(neg_slice_counter)
+                        while neg_slice_counter>=1:
+                            while True:
+                                data_ind = neg_slice_selector.integers(0,len(data_list))
+                                if len(data_list[data_ind].labels)==0:
+                                    break
+                            print(data_list[data_ind].data_shape[0])
+                            i_z = neg_slice_selector.integers(0,data_list[data_ind].data_shape[0])
+                            print(i_z)
+                            ddd = copy.deepcopy(data_list[data_ind])
+                            self.preprocessor.load_and_preprocess(ddd, desired_original_slices = [i_z])
+                            normalized_img = ddd.data[0,:,:]
+                            dest_filename = f"neg_{neg_ind}.jpg"
+                            dest_path = os.path.join(images_dir, dest_filename)
+                            Image.fromarray(normalized_img).save(dest_path)          
+                            label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
+                            with open(label_path, 'w') as f:
+                                pass
+                            neg_ind += 1
+                            neg_slice_counter-=1
                     return 0,0
                 else:
                     motor_counts = []
