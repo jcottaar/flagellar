@@ -132,7 +132,7 @@ class ModelRunner(fls.BaseClass):
                 model = copy.deepcopy(self.base_model)
                 self.modifier_values = dict()
                 self.modifier_values['seed'] = self.seed
-                model.seed = self.seed            
+                model.seed = self.seed+1
                 for key, value in self.modifier_dict.items():  
                     if not self.use_missing_value:
                         self.modifier_values[key] = value.random_function(rng)
