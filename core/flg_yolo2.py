@@ -94,6 +94,7 @@ class YOLOModel(fls.BaseClass):
     # infer
     confidence_threshold = 0.
     relative_confidence_threshold = 0.2
+    final_relative_confidence_threshold = False
     concentration = 1
 
     # trained
@@ -578,7 +579,8 @@ class YOLOModel(fls.BaseClass):
             #if len(all_detections)==0:
             #    all_detections = pd.DataFrame(all_detections, column = ['z', 'y', 'x', 'confidence', 'i_model'])
             all_detections = pd.DataFrame(all_detections, columns = ['z', 'y', 'x', 'confidence', 'i_model'])
-            #all_detections = all_detections[all_detections['confidence']>self.relative_confidence_threshold*np.max(all_detections['confidence'])]
+            if self.final_relative_confidence_threshold:
+                all_detections = all_detections[all_detections['confidence']>self.relative_confidence_threshold*np.max(all_detections['confidence'])]
             #final_detections = perform_3d_nms(all_detections)
             #final_detections.sort(key=lambda x: x['confidence'], reverse=True)
 
