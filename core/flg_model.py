@@ -245,7 +245,7 @@ class FindClusters(fls.BaseClass):
     distance_threshold = 100.
     min_confidence = np.nan
     n_models = np.nan
-    max_n_detections = 1000
+    max_n_detections = np.inf
 
     def cluster(self, data):
         """
@@ -256,7 +256,7 @@ class FindClusters(fls.BaseClass):
             return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
         detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)
         if len(detections)>self.max_n_detections:
-            detections = detections[:max_n_detections]            
+            detections = detections[:self.max_n_detections]            
     
         zyx = []
         for d in detections:

@@ -58,6 +58,9 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['include_multi_motor'] = pm(True, lambda r:r.uniform()>0., data_sel)
     res.modifier_dict['alternative_slice_selection'] = pm(False, lambda r:r.uniform()>0.2, yolo)
     res.modifier_dict['negative_slice_ratio'] = pm(0., lambda r:(r.uniform()>0.5)*r.uniform(0,1.), yolo)
+    res.modifier_dict['ratio_of_motors_allowed'] = pm(1., lambda r:r.uniform(0.45,0.6), setattr)
+    res.modifier_dict['relative_confidence_threshold'] = pm(0.2, lambda r:r.uniform(0.15,0.25), yolo)
+    res.modifier_dict['distance_threshold'] = pm(100., lambda r:r.uniform(0.01, 25.), clusters)
 
     res.base_model.train_data_selector.datasets = []
     res.modifier_dict['tom'] = pm(True, lambda r:r.uniform()>0., add_dataset)
@@ -189,6 +192,9 @@ def data_sel(model, name, value):
 
 def yolo(model, name, value):
     setattr(model.step1Labels, name, value)
+
+def clusters(model, name, value):
+    setattr(model.step2Motors, name, value)
 
 def add_dataset(model, name, value):
     if value:

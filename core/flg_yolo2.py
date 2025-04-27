@@ -94,7 +94,7 @@ class YOLOModel(fls.BaseClass):
     # infer
     confidence_threshold = 0.
     relative_confidence_threshold = 0.2
-    final_relative_confidence_threshold = False
+    final_relative_confidence_threshold = True
     concentration = 1
 
     # trained
