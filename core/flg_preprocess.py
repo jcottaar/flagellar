@@ -111,8 +111,9 @@ class Preprocessor(fls.BaseClass):
             mean_per_slice = cp.mean(img,axis=(1,2))
             std_per_slice = cp.std(img,axis=(1,2)).astype(cp.float16)
             for ii in range(img.shape[0]):
-                img[ii,...] = (img[ii,...] - mean_per_slice[ii,None,None]) / std_per_slice[ii,None,None]
+                img[ii,...] = (img[ii,...] - mean_per_slice[ii,None,None]) / std_per_slice[ii,None,None]                
                 if not np.isnan(self.scale_std_clip_value):
+                    #print(cp.min(img[ii,:,:]), cp.max(img[ii,:,:]))
                     img[ii,...] = (img[ii,...]+self.scale_std_clip_value)/(2*self.scale_std_clip_value)
                     img[ii,...] = cp.clip(img[ii,...], 0., 1.)     
             #for ii in range(img.shape[0]):
