@@ -245,15 +245,19 @@ class Preprocessor2(fls.BaseClass):
 
         # Moving average scaling
         if self.scale_moving_average:
-            moving_size = min(np.round(self.scale_moving_average_size / self.target_voxel_spacing).astype(int), min(img.shape[1], img.shape[2]))
+            moving_size = min(np.round(self.scale_moving_average_size / self.target_voxel_spacing).astype(int), min(img.shape[1]-4, img.shape[2]-4))
             pad_size = moving_size//2
             conv_matrix = cp.ones((moving_size,moving_size), dtype=cp.float32)
             conv_matrix = conv_matrix/np.sum(conv_matrix)
             for ii in range(img.shape[0]):
                 arr = img[ii,...]
+                print(arr.shape, conv_matrix.shape)
                 moving_mean = cupyx.scipy.signal.fftconvolve(arr, conv_matrix, mode='same')  
+                print(moving_mean.shape)
                 assert cp.max(moving_mean)>0
+                print(pad_size)
                 moving_mean = moving_mean[pad_size:-pad_size,pad_size:-pad_size]
+                print(moving_mean.shape)
                 moving_mean = cp.pad(moving_mean, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
                 img[ii,...] = (img[ii,...] - moving_mean)                
         else:
@@ -270,7 +274,7 @@ class Preprocessor2(fls.BaseClass):
         
         # Moving STD scaling
         if self.scale_moving_std:
-            moving_size = min(np.round(self.scale_moving_std_size / self.target_voxel_spacing).astype(int), min(img.shape[1], img.shape[2]))
+            moving_size = min(np.round(self.scale_moving_std_size / self.target_voxel_spacing).astype(int), min(img.shape[1]-4, img.shape[2]-4))
             #print(moving_size)
             pad_size = moving_size//2
             conv_matrix = cp.ones((moving_size,moving_size), dtype=cp.float32)

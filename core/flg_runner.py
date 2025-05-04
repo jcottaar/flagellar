@@ -201,10 +201,9 @@ def add_dataset(model, name, value):
         model.train_data_selector.datasets.append(name)
 
 def use_best_epoch(model, name, value):
-    if value:
-        model.step1Labels.use_best_epoch = value
-        if not model.step1Labels.use_best_epoch:
-            model.step1Labels.patience = 0
+    model.step1Labels.use_best_epoch = value
+    if not model.step1Labels.use_best_epoch:
+        model.step1Labels.patience = 0
 
 def set_scale_approach(model, name, value):
     model.step1Labels.preprocessor.scale_std = False

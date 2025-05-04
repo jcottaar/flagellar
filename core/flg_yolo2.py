@@ -205,8 +205,8 @@ class YOLOModel(fls.BaseClass):
                                 for i_row in range(len(data.labels)):
                                     dist = np.abs(data.labels['z'][i_row]-z)
                                     if np.abs(dist)<=self.trust_expanded:
-                                        x_center = data.labels['x'][i_row]
-                                        y_center = data.labels['y'][i_row]
+                                        x_center = data.labels['x'][i_row]*dd.resize_factor
+                                        y_center = data.labels['y'][i_row]*dd.resize_factor
                                         img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                                         x_center_norm = x_center / img_width
                                         y_center_norm = y_center / img_height
@@ -565,8 +565,8 @@ class YOLOModel(fls.BaseClass):
                                         #if confidence >= self.confidence_threshold:
                                         if todo[box_idx]:
                                             x1, y1, x2, y2 = result.boxes.xyxy[box_idx].cpu().numpy()
-                                            x_center = (x1 + x2) / 2
-                                            y_center = (y1 + y2) / 2
+                                            x_center = (x1 + x2) / 2 / data.resize_factor
+                                            y_center = (y1 + y2) / 2 / data.resize_factor
                                             all_detections.append({
                                                 'z': round(data.slices_present[sub_batch_slice_nums[j]]),
                                                 'y': round(y_center),
