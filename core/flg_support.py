@@ -558,20 +558,24 @@ def mark_tf_pn(data, reference_data, mark_false_negative=False):
     for d,r in zip(data,reference_data):
         assert d.name==r.name
         #d.labels_unfiltered['tf_pn'] = np.nan
-        for row_d,_ in d.labels_unfiltered.iterrows():
+        for row_d in range(len(d.labels_unfiltered)):#d.labels_unfiltered.iterrows():
+            #print('row_d: ', row_d)
             is_true_positive = False
             for row_r in range(len(r.labels)):
                 coordinate_cols = ['z', 'y', 'x']
                 loc_d = d.labels_unfiltered[coordinate_cols][row_d:row_d+1].values
                 loc_r = r.labels[coordinate_cols][row_r:row_r+1].values
+                #print(loc_d)
+                #print(loc_r)
                 distance = np.linalg.norm(loc_d - loc_r)*r.voxel_spacing
+                #print(distance)
                 if distance<1000:
                     is_true_positive = True
                     break
             if is_true_positive:
-                d.labels_unfiltered.at[row_d,'tf_pn'] = 0
+                d.labels_unfiltered.at[ d.labels_unfiltered.index[row_d],'tf_pn'] = 0
             else:
-                d.labels_unfiltered.at[row_d,'tf_pn'] = 1
+                d.labels_unfiltered.at[ d.labels_unfiltered.index[row_d],'tf_pn'] = 1
 
 
 def create_submission_dataframe(submission_data, reference_data = load_all_test_data(), include_voxel_spacing = False):
