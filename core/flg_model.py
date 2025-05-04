@@ -270,9 +270,9 @@ class FindClusters(fls.BaseClass):
         final_detections = []
         for lab in np.unique(clustering.labels_):
             this_detections = detections[clustering.labels_==lab].reset_index()
-            print('this')
-            print(this_detections)
-            print('------')
+            #print('this')
+            #print(this_detections)
+            #print('------')
             conf_per_model = []
             for i_model in range(self.n_models):
                 this_detections_this_model = this_detections[this_detections['i_model']==i_model]
