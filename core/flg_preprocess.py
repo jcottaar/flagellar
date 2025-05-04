@@ -42,6 +42,7 @@ class Preprocessor(fls.BaseClass):
     moving_ratio = 0.2
 
     # Blurring
+    blur_xy = 0.
     blur_z = 1
 
     # Other
@@ -75,10 +76,14 @@ class Preprocessor(fls.BaseClass):
                 if self.scale_percentile_clip:
                     img[ii,:,:] = cp.clip(img[ii,:,:], 0., 1.)
 
+        # Blur
         blur_matrix = cp.ones((self.blur_z,1), dtype=cp.float16)/self.blur_z
         import cupyx.scipy.signal
+        import cupyx.scipy.ndimage
         for ii in range(img.shape[2]):
             img[:,:,ii] = cupyx.scipy.signal.fftconvolve(img[:,:,ii], blur_matrix, mode='same')
+        for ii in range(img.shape[0]):
+            img[ii,:,:] = cupyx.scipy.ndimage.gaussian_filter(img[ii,:,:], sigma = self.blur_xy)
 
 
         # Moving average/STD scaling
