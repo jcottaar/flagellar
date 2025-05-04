@@ -16,6 +16,7 @@ import sklearn.neighbors
 import sklearn.mixture
 import sklearn.gaussian_process
 import h5py
+import math
 
 def extract_patch(matrix, center, patch_size, constant_value=0):
     """
@@ -60,7 +61,7 @@ def extract_patch(matrix, center, patch_size, constant_value=0):
     
     return patch
 
-def collect_patches(data, sizes, normalize_slices = True):    
+def collect_patches(data, sizes, preprocessor):    
     collected = []
     is_edge = []
     
@@ -71,18 +72,21 @@ def collect_patches(data, sizes, normalize_slices = True):
             desired_slices = np.arange(coords[0]-sizes[0], coords[0]+sizes[0]+1)
             desired_slices = desired_slices[desired_slices>=0]
             desired_slices = desired_slices[desired_slices<dd.data_shape[0]]
-            dd.load_to_memory(desired_slices=list(desired_slices))            
+            #dd.load_to_memory(desired_slices=list(desired_slices))            
+            preprocessor.load_and_preprocess(dd, desired_original_slices=list(desired_slices))
             coords[0] = len(dd.slices_present)//2
+            coords[1] = np.round(coords[1]*dd.resize_factor).astype(int)
+            coords[2] = np.round(coords[2]*dd.resize_factor).astype(int)
             #is_edge.append(not np.all(np.logical_and(coords >= sizes, coords <= np.array(np.shape(f['data'])) - sizes - 1)))
             is_edge = np.nan # todo
             #to_append = copy.deepcopy(data_ext[coords[0]+3:coords[0]+2*sizes[0]+4,coords[1]+3:coords[1]+2*sizes[1]+4,coords[2]+3:coords[2]+2*sizes[2]+4])
             #to_append = to_append - np.mean(to_append)
                
             to_append = copy.deepcopy(extract_patch(dd.data, coords, sizes, constant_value=np.nan))            
-            if normalize_slices:
-                 mean_list = np.nanmean(to_append, axis=(1,2))#extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
-                 std_list = np.nanstd(to_append, axis=(1,2))#extract_patch(d.std_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
-                 to_append = (to_append-mean_list[:,np.newaxis,np.newaxis])/std_list[:,np.newaxis,np.newaxis]
+            # if normalize_slices:
+            #      mean_list = np.nanmean(to_append, axis=(1,2))#extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+            #      std_list = np.nanstd(to_append, axis=(1,2))#extract_patch(d.std_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+            #      to_append = (to_append-mean_list[:,np.newaxis,np.newaxis])/std_list[:,np.newaxis,np.newaxis]
             collected.append( to_append )                     
 
     collected = np.stack(collected)
@@ -119,3 +123,65 @@ def or_matrix_with_offset(A,B,offset):
 
     # Add B to A at the specified offset
     A[z_start:z_end, y_start:y_end, x_start:x_end] = np.logical_or(A[z_start:z_end, y_start:y_end, x_start:x_end],B[bz_start:bz_end, by_start:by_end, bx_start:bx_end])
+
+import cupy as cp
+from cupyx.scipy.fft import fftn, ifftn, fftshift, ifftshift
+
+def fourier_resample_nd(x: cp.ndarray, new_shape: tuple) -> cp.ndarray:
+    """
+    Fourier-based N-D resampling of a real or complex CuPy array x to shape `new_shape`.
+    
+    Parameters
+    ----------
+    x : cp.ndarray
+        Input array of shape old_shape.
+    new_shape : tuple of ints
+        Desired output shape, same number of dims as x.ndim.
+    
+    Returns
+    -------
+    y : cp.ndarray
+        Resampled array of shape new_shape, same dtype as x (real outputs if x was real).
+    """
+    old_shape = x.shape
+    if len(old_shape) != len(new_shape):
+        raise ValueError("new_shape must have same number of dimensions as x")
+
+    # 1) Forward FFT
+    Xf = fftn(x)
+    # 2) Shift zero-frequency to center
+    Xf_shift = fftshift(Xf)
+
+    # 3) Prepare target freq array
+    Yf_shift = cp.zeros(new_shape, dtype=Xf_shift.dtype)
+
+    # 4) Compute slices for each axis and copy overlap
+    src_slices = []
+    dst_slices = []
+    for old_n, new_n in zip(old_shape, new_shape):
+        min_n = min(old_n, new_n)
+        # source start/end
+        src_start = (old_n - min_n) // 2
+        src_end   = src_start + min_n
+        # dest start/end
+        dst_start = (new_n - min_n) // 2
+        dst_end   = dst_start + min_n
+        src_slices.append(slice(src_start, src_end))
+        dst_slices.append(slice(dst_start, dst_end))
+
+    # Copy the low-frequency region
+    Yf_shift[tuple(dst_slices)] = Xf_shift[tuple(src_slices)]
+
+    # 5) Inverse shift and inverse FFT
+    Yf = ifftshift(Yf_shift)
+    y  = ifftn(Yf)
+
+    # Normalize amplitude
+    norm_factor = math.prod(new_shape) / math.prod(old_shape)
+    y = y * norm_factor
+
+    # 6) Return real part if input was real
+    if cp.isrealobj(x):
+        return cp.real(y)
+    else:
+        return y

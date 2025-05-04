@@ -45,7 +45,7 @@ def animate_3d_matrix_no_rescale(animation_arr, fps=20, figsize=(6,6), axis_off=
     fig = plt.figure(figsize=figsize)  # if size is too big then gif gets truncated
 
     im = plt.imshow(animation_arr[0], cmap='bone')    
-    plt.clim([0, 255])
+    plt.clim([0, 1])
     if axis_off:
         plt.axis('off')
     #plt.title(f"{tomo_id}", fontweight="bold")
@@ -114,9 +114,11 @@ def animate_labels_full_slice(data_list, z_size):
     
     return animate_3d_matrix_no_rescale(mat_combined,figsize=(12,4), fps=5)
     
-def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False, animate=True):
-    mat = flg_numerics.collect_patches(data_list, np.array(sizes),normalize_slices=normalize_slices)[0]
-    mat = np.nansum(mat,axis=1)[:,np.newaxis,:,:]    
+def animate_labels(data_list, sizes, tile_num=5, animate=True, preprocessor=None):
+    if preprocessor is None:
+        preprocessor = flg_preprocess.Preprocessor()
+    mat = flg_numerics.collect_patches(data_list, np.array(sizes),preprocessor=preprocessor)[0]
+    mat = np.nanmean(mat,axis=1)[:,np.newaxis,:,:]   
     #print(mat.shape)
     #mat = np.reshape(mat, (-1, mat.shape[2], mat.shape[3]))
     #return animate_3d_matrix(mat,figsize=(4,4))
@@ -126,8 +128,8 @@ def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False, animate
     cur_tile_y = 0
     for ii in range(mat.shape[0]):
         #print(ii, len(mat_tiled_list))
-        m=mat[ii,:,:,:].astype(np.float32)
-        m = (m-np.nanmean(m))/np.nanstd(m)
+        m=mat[ii,:,:,:].astype(np.float32)/255
+        #m = (m-np.nanmean(m))/np.nanstd(m)
         if cur_tile_x==0 and cur_tile_y==0:
             cur_mat = np.zeros(shape=(m.shape[0], tile_num*m.shape[1], tile_num*m.shape[2]))
         cur_mat[:, cur_tile_x*m.shape[1]:(cur_tile_x+1)*m.shape[1], cur_tile_y*m.shape[1]:(cur_tile_y+1)*m.shape[1]] = m
@@ -145,13 +147,13 @@ def animate_labels(data_list, sizes, tile_num=5, normalize_slices=False, animate
     #print(mat_combined.shape)
 
     if animate:
-        return animate_3d_matrix(mat_combined,figsize=(8,8), fps=5)
+        return animate_3d_matrix_no_rescale(mat_combined,figsize=(8,8), fps=5)
     else:
         plt.figure(figsize=(6,6))
         plt.imshow(mat_combined[0,:,:], cmap='bone')
-        min_val = np.percentile(mat_combined, 2)
-        max_val = np.percentile(mat_combined,98)
-        plt.clim([min_val, max_val])
+        #min_val = np.percentile(mat_combined, 2)
+        #max_val = np.percentile(mat_combined,98)
+        plt.clim([0,1])
 
 
 def show_tf_pn(inferred_data, reference_data):

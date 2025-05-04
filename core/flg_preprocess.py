@@ -18,6 +18,8 @@ import sklearn.gaussian_process
 import h5py
 import cupy as cp
 import time
+import gc
+import flg_numerics
 
 @dataclass
 class Preprocessor(fls.BaseClass):
@@ -106,7 +108,7 @@ class Preprocessor(fls.BaseClass):
                     assert cp.max(moving_mean_of_squared)>0
                     moving_mean_of_squared = moving_mean_of_squared[pad_size:-pad_size,pad_size:-pad_size]
                     moving_mean_of_squared = cp.pad(moving_mean_of_squared, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
-                    moving_std = moving_mean_of_squared - moving_mean**2
+                    moving_std = np.sqrt(moving_mean_of_squared - moving_mean**2)
                     img[ii,...] = ((arr - moving_mean)/moving_std)
                     
                     
@@ -159,4 +161,153 @@ class Preprocessor(fls.BaseClass):
 
         data.data = cp.asnumpy(img)
 
+class Preprocessor2(fls.BaseClass):
+
+    # Loading
+    pad_to_original_size = False
+
+    # Percentile scaling    
+    scale_percentile_value = 3.
+
+    # Resizing
+    target_voxel_spacing = 15. # Angstrom
+
+    # Blurring
+    blur_xy = 30. # Angstrom
+    blur_z = 0. # Angstrom
+
+    # Average/STD scaling
+    scale_moving_average = True
+    scale_moving_average_size = 3000.
     
+    scale_moving_std = True
+    scale_moving_std_size = 3000.
+    blur_xy_moving_std = 60. # Angstrom
+
+    clip_value = 3.
+
+    #@fls.profile_each_line
+    def load_and_preprocess(self, data, desired_original_slices = None):
+
+        data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
+
+        fls.claim_gpu('cupy')
+        while True:
+            try:
+                img = cp.array(data.data).astype(cp.float32)
+                break
+            except:
+                fls.claim_gpu('')
+                time.sleep(1)
+                fls.claim_gpu('cupy')
+                print('failed cupy')
+                pass
+
+        # Scale percentile
+        for ii in range(img.shape[0]):
+            perc_low = cp.percentile(img[ii,:,:], self.scale_percentile_value)
+            perc_high = cp.percentile(img[ii,:,:], 100-self.scale_percentile_value)
+            img[ii,:,:] = (img[ii,:,:]-perc_low)/(perc_high-perc_low)
+            img[ii,:,:] = cp.clip(img[ii,:,:], 0., 1.)
+
+        # Resize
+        # print(img.shape, data.voxel_spacing)
+        # plt.figure()
+        # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
+        # plt.colorbar()
+        data.resize_factor = data.voxel_spacing/self.target_voxel_spacing
+        target_shape = tuple(np.round(np.array( (img.shape[1], img.shape[2]) )*data.resize_factor/2 ).astype(int)*2)
+        old_img_list = [img[ii,:,:] for ii in range(img.shape[0])]
+        del img        
+        #gc.collect()
+        img = cp.zeros( (len(old_img_list), target_shape[0], target_shape[1]), dtype=cp.float32 )
+        for ii in range(img.shape[0]):
+            n_y = old_img_list[ii].shape[0]
+            if n_y%2 == 1:
+                n_y = n_y-1
+            n_x = old_img_list[ii].shape[1]
+            if n_x%2 == 1:
+                n_x = n_x-1
+            img[ii,:,:] = flg_numerics.fourier_resample_nd(old_img_list[ii][:n_y,:n_x], target_shape)
+            img[ii,:,:] = cp.clip(img[ii,:,:], 0., 1.)
+        # plt.figure()
+        # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
+        # plt.colorbar()
+        # print(target_shape, img.shape)
+
+        import cupyx.scipy.signal
+        import cupyx.scipy.ndimage
+
+        # Blur
+        for ii in range(img.shape[0]):
+            img[ii,:,:] = cupyx.scipy.ndimage.gaussian_filter(img[ii,:,:], sigma = self.blur_xy/self.target_voxel_spacing)        
+        assert self.blur_z==0, 'todo'
+
+        # Moving average scaling
+        if self.scale_moving_average:
+            moving_size = min(np.round(self.scale_moving_average_size / self.target_voxel_spacing).astype(int), min(img.shape[1], img.shape[2]))
+            pad_size = moving_size//2
+            conv_matrix = cp.ones((moving_size,moving_size), dtype=cp.float32)
+            conv_matrix = conv_matrix/np.sum(conv_matrix)
+            for ii in range(img.shape[0]):
+                arr = img[ii,...]
+                moving_mean = cupyx.scipy.signal.fftconvolve(arr, conv_matrix, mode='same')  
+                assert cp.max(moving_mean)>0
+                moving_mean = moving_mean[pad_size:-pad_size,pad_size:-pad_size]
+                moving_mean = cp.pad(moving_mean, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
+                img[ii,...] = (img[ii,...] - moving_mean)                
+        else:
+            for ii in range(img.shape[0]):
+                img[ii,:,:] = img[ii,:,:] - np.mean(img[ii,:,:])
+
+        # plt.figure()
+        # plt.imshow(cp.asnumpy(moving_mean), cmap='bone')
+        # plt.colorbar()
+        # #print(cp.min(img), cp.max(img))
+        # plt.figure()
+        # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
+        # plt.colorbar()
+        
+        # Moving STD scaling
+        if self.scale_moving_std:
+            moving_size = min(np.round(self.scale_moving_std_size / self.target_voxel_spacing).astype(int), min(img.shape[1], img.shape[2]))
+            #print(moving_size)
+            pad_size = moving_size//2
+            conv_matrix = cp.ones((moving_size,moving_size), dtype=cp.float32)
+            conv_matrix = conv_matrix/np.sum(conv_matrix)
+            for ii in range(img.shape[0]):
+                arr = cupyx.scipy.ndimage.gaussian_filter(img[ii,...], sigma = self.blur_xy_moving_std/self.target_voxel_spacing)        
+                moving_mean = cupyx.scipy.signal.fftconvolve(arr, conv_matrix, mode='same')  
+                assert cp.max(moving_mean)>0
+                moving_mean = moving_mean[pad_size:-pad_size,pad_size:-pad_size]
+                moving_mean = cp.pad(moving_mean, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
+
+                moving_mean_of_squared = cupyx.scipy.signal.fftconvolve(arr**2, conv_matrix, mode='same')            
+                assert cp.max(moving_mean_of_squared)>0
+                moving_mean_of_squared = moving_mean_of_squared[pad_size:-pad_size,pad_size:-pad_size]
+                moving_mean_of_squared = cp.pad(moving_mean_of_squared, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
+                moving_std = np.sqrt(moving_mean_of_squared - moving_mean**2)
+                
+                img[ii,...] = img[ii,...]/moving_std
+                #print(np.mean(moving_std), np.std(arr))
+        else:
+            for ii in range(img.shape[0]):
+                img[ii,:,:] = img[ii,:,:]/np.std(img[ii,:,:])
+
+        # plt.figure()
+        # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
+        # plt.colorbar()
+       
+        # print(target_shape, img.shape)
+        for ii in range(img.shape[0]):
+            img[ii,...] = (img[ii,...]+self.clip_value)/(2*self.clip_value)
+            img[ii,...] = cp.clip(img[ii,...], 0., 1.)     
+
+        # plt.figure()
+        # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
+        # plt.colorbar()
+        
+        img = img*255
+        img = img.astype(cp.uint8)
+
+        data.data = cp.asnumpy(img)

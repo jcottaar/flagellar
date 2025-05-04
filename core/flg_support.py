@@ -86,7 +86,7 @@ os.makedirs(temp_dir, exist_ok=True)
 os.makedirs(h5py_cache_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 os.makedirs(result_dir, exist_ok=True)
-profiling = False
+profiling = True
 #if is_submission:
 #    profiling = False
 
