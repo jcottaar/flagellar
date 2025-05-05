@@ -203,6 +203,7 @@ class YOLOModel(fls.BaseClass):
                         x_start, x_end, x_scaling = find_coords(normalized_img.shape[1], self.img_size, poi_x)
                         y_start, y_end, y_scaling = find_coords(normalized_img.shape[0], self.img_size, poi_y)
                         normalized_img = normalized_img[y_start:y_end, x_start:x_end]
+                        assert normalized_img.shape == (self.img_size, self.img_size)
                     else:
                         x_start = 0; y_start = 0;
                     
@@ -680,10 +681,16 @@ class YOLOModel(fls.BaseClass):
         preprocessor.load_and_preprocess(data) 
 
         if self.prevent_ultralytics_resize:
-            image_size = (np.round(max(data.data.shape[1],  data.data.shape[2])/32)*32).astype(int).item()
+            #print('before ', data.data.shape)
+            image_size = ( (np.ceil(data.data.shape[1]/32)*32).astype(int).item(), (np.ceil(data.data.shape[2]/32)*32).astype(int).item() )
+            after_x = max(0, image_size[1]-data.data.shape[2])
+            after_y = max(0, image_size[0]-data.data.shape[1])
+            data.data = np.pad(data.data, ((0,0),(0,after_y),(0,after_x)), mode='constant', constant_values=127)
+            assert data.data.shape == (data.data.shape[0], image_size[0], image_size[1])
+            #print('after ', data.data.shape)
         else:
             image_size = self.img_size
-        print('image_size: ', image_size)
+        #print('image_size: ', image_size)
         
         cpu, device = fls.prep_pytorch(self.seed, True, False)
         BATCH_SIZE = 32

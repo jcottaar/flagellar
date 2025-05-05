@@ -29,7 +29,7 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['scale_std_clip_value'] = pm(3., lambda r:r.uniform(1.6,2.2), prep)
     res.modifier_dict['blur_z'] = pm(1, lambda r:max(1,1+2*r.integers(0,4)), prep) 
     res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-2,3)).item(), yolo)
-    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,71)).item(), yolo)   
+    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,71)).item(), n_epochs)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-4,-2.75)), yolo)  
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>1., use_best_epoch)   
     model_list = ['yolov8s', 'yolov8m', 'yolov8l', 'yolov9s', 'yolov9m', 'yolov10s', 'yolov10m', 'yolo11s', 
@@ -215,5 +215,9 @@ def set_scale_approach(model, name, value):
         model.step1Labels.preprocessor.scale_moving_average = True
     if value>=3:
         model.step1Labels.preprocessor.scale_also_moving_std = True
+
+def n_epochs(model,name,value):
+    model.step1Labels.n_epochs = value
+    model.step1Labels.close_mosaic = value//2
             
         
