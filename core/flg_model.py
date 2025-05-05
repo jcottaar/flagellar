@@ -381,8 +381,7 @@ class TestTimeAugmentation(fls.Model):
         self.model_internal.ratio_of_motors_allowed = 1.
         for v in self.voxel_spacing_scale_vals:
             data2 = copy.deepcopy(data)
-            for d in data2:
-                d.voxel_spacing *= v
+            self.model_internal.step1Labels.preprocessor.voxel_scale = v
             data_list.append(self.model_internal.infer(data2))
         data_out = []
         for ii in range(len(data_list[0])):

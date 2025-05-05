@@ -165,6 +165,7 @@ class Preprocessor2(fls.BaseClass):
 
     # Loading
     pad_to_original_size = False
+    voxel_scale = 1.
 
     # Percentile scaling    
     scale_percentile_value = 3.
@@ -194,8 +195,9 @@ class Preprocessor2(fls.BaseClass):
         # Guess voxel spacing if not provided
         if np.isnan(data.voxel_spacing):
             xy_size = np.sqrt(data.data.shape[1]*data.data.shape[2])
-            data.voxel_spacing = (-8.71223429e-03)*xy_size + 2.33859781e+01
+            data.voxel_spacing = ((-8.71223429e-03)*xy_size + 2.33859781e+01)
             print('Guessed voxel spacing: ', data.voxel_spacing)
+        data.voxel_spacing *= self.voxel_scale
 
         fls.claim_gpu('cupy')
         while True:
@@ -240,6 +242,8 @@ class Preprocessor2(fls.BaseClass):
         # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
         # plt.colorbar()
         # print(target_shape, img.shape)
+
+        print(img.shape)
 
         import cupyx.scipy.signal
         import cupyx.scipy.ndimage
