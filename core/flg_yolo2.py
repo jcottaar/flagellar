@@ -52,6 +52,7 @@ class YOLOModel(fls.BaseClass):
     box_size = 24
     trust = 4
     negative_slice_ratio = 0.
+    negative_label_threshold = 1.
 
     alternative_slice_selection = False
     trust_expanded = 6
@@ -219,6 +220,7 @@ class YOLOModel(fls.BaseClass):
                     # plt.pause(0.001)
                     # plt.figure()
                     # plt.imshow(normalized_img, cmap='bone')
+                    # plt.title(data.name)
                     with open(label_path, 'w') as f:
                         for ii in range(x_center.shape[0]):
                             img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
@@ -250,6 +252,11 @@ class YOLOModel(fls.BaseClass):
                                     in_any_range = True
                                 if np.abs(dist)>=self.trust_expanded and np.abs(dist)<=self.forbidden_range:
                                     in_forbidden_range = True
+                            for i_row in range(len(data.negative_labels)):
+                                if data.negative_labels['confidence'][i_row]>self.negative_label_threshold:
+                                    dist = np.abs(data.negative_labels['z'][i_row]-i_slice)
+                                    if np.abs(dist)<=self.trust:
+                                        in_any_range = True
                             if in_any_range and not in_forbidden_range:
                                 slices_to_do.append(i_slice)
                         if len(slices_to_do)==0:
@@ -266,28 +273,28 @@ class YOLOModel(fls.BaseClass):
                             y_center = []
                             x_width = []
                             y_width = []
-                            
+
+                            x_poi = np.nan
+                            y_poi = np.nan
                             for i_row in range(len(data.labels)):
                                 dist = np.abs(data.labels['z'][i_row]-z)
                                 if np.abs(dist)<=self.trust_expanded:
                                     x_center.append(data.labels['x'][i_row]*dd.resize_factor)
                                     y_center.append(data.labels['y'][i_row]*dd.resize_factor)
                                     x_width.append(self.box_size)
-                                    y_width.append(self.box_size)
-                                    #
-                                    #x_center_norm = x_center / img_width
-                                    #y_center_norm = y_center / img_height
-                                    #box_width_norm = self.box_size / img_width
-                                    #box_height_norm = self.box_size / img_height
-                                    #img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
-                                    #f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
-                                    
-                                    
-                                    
-                            #plt.pause(0.001)
-                            #raise 'stop'
-
-                            write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width, x_center[0], y_center[0])
+                                    y_width.append(self.box_size)                                    
+                                    if np.isnan(x_poi):
+                                        x_poi = x_center[-1]
+                                        y_poi = y_center[-1]
+                            for i_row in range(len(data.negative_labels)):
+                                if data.negative_labels['confidence'][i_row]>self.negative_label_threshold:
+                                    dist = np.abs(data.negative_labels['z'][i_row]-z)
+                                    if np.abs(dist)<=self.trust:                                 
+                                        if np.isnan(x_poi):
+                                            x_poi = data.negative_labels['x'][i_row]*dd.resize_factor
+                                            y_poi = data.negative_labels['y'][i_row]*dd.resize_factor
+                            assert not np.isnan(x_poi)
+                            write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width, x_poi, y_poi)
                             neg_slice_counter += self.negative_slice_ratio
                         while neg_slice_counter>=1:
                             while True:

@@ -61,6 +61,41 @@ def extract_patch(matrix, center, patch_size, constant_value=0):
     
     return patch
 
+def collect_patches_neg(data, sizes, preprocessor, n_collect):
+    neg_labels = fls.dill_load(fls.code_dir + '/neg_labels.pickle')
+    data = fls.load_all_train_data()
+    collected = []
+    is_edge = []
+    for i_row in range(n_collect):
+        name = neg_labels['name'][i_row]
+        for d in data:
+            if d.name == name:
+                break
+        else:
+            raise 'Not found'
+        if len(d.labels)>0:
+            continue
+        dd = copy.deepcopy(d)
+        coords = np.array((np.round(neg_labels['z'][i_row]).astype(int), np.round(neg_labels['y'][i_row]).astype(int), np.round(neg_labels['x'][i_row]).astype(int)))
+        desired_slices = np.arange(coords[0]-sizes[0], coords[0]+sizes[0]+1)
+        desired_slices = desired_slices[desired_slices>=0]
+        desired_slices = desired_slices[desired_slices<dd.data_shape[0]]
+        preprocessor.load_and_preprocess(dd, desired_original_slices=list(desired_slices))
+        coords[0] = len(dd.slices_present)//2
+        coords[1] = np.round(coords[1]*dd.resize_factor).astype(int)
+        coords[2] = np.round(coords[2]*dd.resize_factor).astype(int)
+        is_edge = np.nan
+        to_append = copy.deepcopy(extract_patch(dd.data, coords, sizes, constant_value=np.nan))        
+        collected.append( to_append )  
+        # print('x')
+        # print(neg_labels[i_row:i_row+1])
+        # print(d.labels)
+
+    collected = np.stack(collected)
+    is_edge = np.array(is_edge)
+    return collected, is_edge
+        
+
 def collect_patches(data, sizes, preprocessor):    
     collected = []
     is_edge = []

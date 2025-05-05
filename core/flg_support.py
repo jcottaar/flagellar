@@ -242,6 +242,7 @@ Data definition and loading
 '''
 loading_executor = None
 all_train_labels = pd.read_csv(data_dir + 'train_labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
+negative_labels = dill_load(code_dir + 'neg_labels.pickle')
 #if env=='local':
 #    extra_train_labels = pd.read_csv(data_dir + '/extra2/labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
 @dataclass
@@ -250,6 +251,7 @@ class Data(BaseClass):
     is_train: bool = field(init=True, default=False)
     name: str = field(init=True, default='')
     labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
+    negative_labels: pd.DataFrame = field(init=True, default_factory=pd.DataFrame)
     labels_unfiltered: object = field(init=True, default_factory=pd.DataFrame)
     labels_unfiltered2: object = field(init=True, default_factory=pd.DataFrame)
     loaded_state: str = field(init=False, default='unloaded') # unloaded, memory
@@ -362,6 +364,7 @@ def load_one_measurement(name, is_train, include_train_labels):
             result.labels = result.labels[0:0]
         result.voxel_spacing = this_labels[0:1][['Voxel spacing']].to_numpy()[0,0]
         result.data_shape = (this_labels[0:1][['Array shape (axis 0)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 1)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 2)']].to_numpy()[0,0])
+        result.negative_labels = negative_labels[negative_labels['name']==name].reset_index()
     result.check_constraints()    
     return result
 

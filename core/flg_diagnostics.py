@@ -114,10 +114,10 @@ def animate_labels_full_slice(data_list, z_size):
     
     return animate_3d_matrix_no_rescale(mat_combined,figsize=(12,4), fps=5)
     
-def animate_labels(data_list, sizes, tile_num=5, animate=True, preprocessor=None):
+def animate_labels(data_list, sizes, tile_num=5, animate=True, preprocessor=None, collect_function = flg_numerics.collect_patches):
     if preprocessor is None:
         preprocessor = flg_preprocess.Preprocessor()
-    mat = flg_numerics.collect_patches(data_list, np.array(sizes),preprocessor=preprocessor)[0]
+    mat = collect_function(data_list, np.array(sizes),preprocessor=preprocessor)[0]
     mat = np.nanmean(mat,axis=1)[:,np.newaxis,:,:]   
     #print(mat.shape)
     #mat = np.reshape(mat, (-1, mat.shape[2], mat.shape[3]))
@@ -154,7 +154,6 @@ def animate_labels(data_list, sizes, tile_num=5, animate=True, preprocessor=None
         #min_val = np.percentile(mat_combined, 2)
         #max_val = np.percentile(mat_combined,98)
         plt.clim([0,1])
-
 
 def show_tf_pn(inferred_data, reference_data):
     inferred_data_x = copy.deepcopy(inferred_data)
