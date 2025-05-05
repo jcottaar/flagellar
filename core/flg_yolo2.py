@@ -265,11 +265,12 @@ class YOLOModel(fls.BaseClass):
                             self.preprocessor.load_and_preprocess(ddd, desired_original_slices = [i_z])
                             normalized_img = ddd.data[0,:,:]
                             dest_filename = f"neg_{neg_ind}.jpg"
-                            dest_path = os.path.join(images_dir, dest_filename)
-                            Image.fromarray(normalized_img).save(dest_path)          
-                            label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
-                            with open(label_path, 'w') as f:
-                                pass
+                            # dest_path = os.path.join(images_dir, dest_filename)
+                            # Image.fromarray(normalized_img).save(dest_path)          
+                            # label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
+                            # with open(label_path, 'w') as f:
+                            #     pass
+                            write_image(dest_filename, normalized_img, [],[],[],[])
                             neg_ind += 1
                             neg_slice_counter-=1
                     return 0,0

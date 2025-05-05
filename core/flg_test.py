@@ -98,13 +98,17 @@ def test_yolo_infer(update_reference=False):
 def test_yolo(update_reference=False):
     train_data = fls.load_all_train_data()
     model = flg_model.ThreeStepModelLabelBased()
+    model.step1Labels.preprocessor = flg_preprocess.Preprocessor2()
+    model.step1Labels.fix_norm_bug = True
     model.run_in_parallel = False
     model.calibrate_step_3 = False
     model.seed = 0
-    model.step1Labels.n_ensemble = 2
+    model.step1Labels.n_ensemble = 1
     model.step1Labels.n_epochs = 3
     model.step1Labels.img_size = 320
     model.step1Labels.alternative_slice_selection = True
+    model.step1Labels.trust = 1
+    model.step1Labels.negative_slice_ratio = 0.1
     model.train(train_data[1:150], train_data[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
     test_yolo_infer(update_reference = update_reference)
