@@ -31,6 +31,7 @@ import copy
 import subprocess
 import importlib
 import flg_preprocess
+import matplotlib
 
 
 ran_with_albs = False
@@ -175,7 +176,34 @@ class YOLOModel(fls.BaseClass):
             # Helper function to process a list of tomograms
             def process_tomogram_set(data_list, images_dir, labels_dir, set_name):
                 
-                def write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width):
+                def write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width, poi_x, poi_y):
+
+                    def find_coords(cur_size, target_size, poi):
+                        poi = np.round(poi).astype(int)
+                        c_start = poi - target_size//2
+                        c_end = poi + target_size//2
+                        if c_start<0:
+                            c_end = c_end-c_start
+                            c_start = 0
+                        if c_end>cur_size:
+                            c_start = c_start-(c_end-cur_size)
+                            c_end = cur_size
+                        assert c_end - c_start == target_size
+                        scaling = target_size/cur_size
+                        #print(c_start,c_end,scaling)
+                        return c_start, c_end, scaling
+                        
+
+                    # Pad if necessary
+                    if self.prevent_ultralytics_resize:
+                        after_x = max(0, self.img_size-normalized_img.shape[1])
+                        after_y = max(0, self.img_size-normalized_img.shape[0])
+                        normalized_img = np.pad(normalized_img, ((0,after_y),(0,after_x)), mode='constant', constant_values=127)
+
+                    x_start, x_end, x_scaling = find_coords(normalized_img.shape[1], self.img_size, poi_x)
+                    y_start, y_end, y_scaling = find_coords(normalized_img.shape[0], self.img_size, poi_y)
+                    normalized_img = normalized_img[y_start:y_end, x_start:x_end]
+                    
                     dest_path = os.path.join(images_dir, dest_filename)
                     Image.fromarray(normalized_img).save(dest_path)        
                     
@@ -185,14 +213,22 @@ class YOLOModel(fls.BaseClass):
                     y_width = np.array(y_width)
     
                     label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
+                    # plt.pause(0.001)
+                    # plt.figure()
+                    # plt.imshow(normalized_img, cmap='bone')
                     with open(label_path, 'w') as f:
                         for ii in range(x_center.shape[0]):
                             img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
-                            x_center_norm = x_center[ii] / img_width
-                            y_center_norm = y_center[ii] / img_height
+                            x_center_norm = (x_center[ii]-x_start)/ img_width
+                            y_center_norm = (y_center[ii]-y_start) / img_height
                             box_width_norm = x_width[ii] / img_width
                             box_height_norm = y_width[ii] / img_height
                             f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
+                            x1 = (x_center_norm-box_width_norm/2)*normalized_img.shape[1]
+                            x2 = (x_center_norm+box_width_norm/2)*normalized_img.shape[1]
+                            y1 = (y_center_norm-box_height_norm/2)*normalized_img.shape[0]
+                            y2 = (y_center_norm+box_height_norm/2)*normalized_img.shape[0]
+                            #plt.gca().add_patch(matplotlib.patches.Rectangle((x1,y1), x2-x1,y2-y1, alpha=0.5, facecolor='blue'))
 
                 
                 if self.alternative_slice_selection:
@@ -222,8 +258,7 @@ class YOLOModel(fls.BaseClass):
                             dest_filename = f"{data.name}_z{z:04d}.jpg"                                            
     
                             
-                            #plt.figure()
-                            #plt.imshow(normalized_img, cmap='bone')
+                            
                             x_center = []
                             y_center = []
                             x_width = []
@@ -244,16 +279,12 @@ class YOLOModel(fls.BaseClass):
                                     #img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                                     #f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
                                     
-                                    # x1 = (x_center_norm-box_width_norm/2)*normalized_img.shape[1]
-                                    # x2 = (x_center_norm+box_width_norm/2)*normalized_img.shape[1]
-                                    # y1 = (y_center_norm-box_height_norm/2)*normalized_img.shape[0]
-                                    # y2 = (y_center_norm+box_height_norm/2)*normalized_img.shape[0]
-                                    # import matplotlib
-                                    # plt.gca().add_patch(matplotlib.patches.Rectangle((x1,y1), x2-x1,y2-y1, alpha=0.5, facecolor='blue'))
+                                    
+                                    
                             #plt.pause(0.001)
                             #raise 'stop'
 
-                            write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width)
+                            write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width, x_center[0], y_center[0])
                             neg_slice_counter += self.negative_slice_ratio
                         while neg_slice_counter>=1:
                             while True:
@@ -270,7 +301,7 @@ class YOLOModel(fls.BaseClass):
                             # label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
                             # with open(label_path, 'w') as f:
                             #     pass
-                            write_image(dest_filename, normalized_img, [],[],[],[])
+                            write_image(dest_filename, normalized_img, [],[],[],[], normalized_img.shape[0]//2, normalized_img.shape[1]//2)
                             neg_ind += 1
                             neg_slice_counter-=1
                     return 0,0
