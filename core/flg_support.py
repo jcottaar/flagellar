@@ -33,6 +33,8 @@ import sklearn
 import skimage
 import shutil
 import subprocess
+import inspect
+
 
 
 '''
@@ -71,7 +73,7 @@ match env:
         model_dir = '/kaggle/input/my-flg-models/'        
         output_dir = '/kaggle/working/'
         result_dir = output_dir
-        code_dir = '/flagellar/input/my-flg-library/'
+        code_dir = '/kaggle/input/my-flagellar-library/'
         loader_threads = 8
     case 'vast':
         data_dir = '/flagellar/data/'
@@ -105,6 +107,15 @@ if not multiprocess.current_process().name == "MainProcess":
 '''
 Helper classes and functions
 '''
+
+def list_attrs(obj):
+    for name, val in inspect.getmembers(obj):
+        if name.startswith("_"):
+            continue
+        # skip methods, but let descriptors through
+        if callable(val) and not isinstance(val, property):
+            continue
+        print(f"{name} = {val}")
 
 def remove_and_make_dir(path):
     try: shutil.rmtree(path)
@@ -440,7 +451,7 @@ def train_parallel(model, train_data, validation_data):
 
 @dataclass
 class DataSelector(BaseClass):
-    datasets: list = field(init=False, default_factory = lambda:['tom', 'ycw', 'aba', 'mba'])
+    datasets: list = field(init=False, default_factory = lambda:['tom'])#['tom', 'ycw', 'aba', 'mba'])
     include_multi_motor: bool = field(init=False, default=True)
 
     def select(self,data):
@@ -468,13 +479,12 @@ class Model(BaseClass):
 
     train_data_selector: object = field(init=True, default_factory = DataSelector)
     preprocessor: object = field(init=True, default = None)
-    ratio_of_motors_allowed: float = field(init=True, default=1.)
+    ratio_of_motors_allowed: float = field(init=True, default=0.5)
 
     def __post_init__(self):
         super().__post_init__()
         import flg_preprocess
-        self.preprocessor = flg_preprocess.Preprocessor()
-        
+        self.preprocessor = flg_preprocess.Preprocessor2()        
 
     def _check_constraints(self):
         assert(self.state>=0 and self.state<=1)

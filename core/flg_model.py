@@ -242,7 +242,7 @@ class SimpleHeatmapModel(fls.Model):
             
 @dataclass
 class FindClusters(fls.BaseClass):
-    distance_threshold = 100.
+    distance_threshold = 10.
     min_confidence = np.nan
     n_models = np.nan
     max_n_detections = np.inf
@@ -368,3 +368,34 @@ class ThreeStepModelLabelBased(fls.Model):
 
 
 
+@dataclass
+class TestTimeAugmentation(fls.Model):
+    model_internal:fls.Model = field(init=True, default_factory=ThreeStepModelLabelBased)
+    voxel_spacing_scale_vals: list = field(init=True, default_factory=lambda:[0.5, np.sqrt(0.5), 1., np.sqrt(2)])
+
+    def _train(self, train_data, validation_data):
+        self.model_internal.train(train_data, validation_data)
+
+    def _infer(self,data):
+        data_list = []
+        self.model_internal.ratio_of_motors_allowed = 1.
+        for v in self.voxel_spacing_scale_vals:
+            data2 = copy.deepcopy(data)
+            for d in data2:
+                d.voxel_spacing *= v
+            data_list.append(self.model_internal.infer(data2))
+        data_out = []
+        for ii in range(len(data_list[0])):
+            vals = []
+            for jj in range(len(self.voxel_spacing_scale_vals)):
+                print(data_list[jj][ii].labels)
+                if len(data_list[jj][ii].labels)==0:
+                    vals.append(0)
+                else:
+                    vals.append(data_list[jj][ii].labels['value'][0])
+            ind = np.argmax(vals)
+            print(ind)
+            data_out.append(data_list[ind][ii])
+            
+        return data_out
+        

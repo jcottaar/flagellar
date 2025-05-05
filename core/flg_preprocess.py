@@ -170,7 +170,7 @@ class Preprocessor2(fls.BaseClass):
     scale_percentile_value = 3.
 
     # Resizing
-    target_voxel_spacing = 15. # Angstrom
+    target_voxel_spacing = 20. # Angstrom
 
     # Blurring
     blur_xy = 30. # Angstrom

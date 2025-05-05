@@ -38,23 +38,23 @@ ran_with_albs = False
 
 @dataclass
 class YOLOModel(fls.BaseClass):
-    preprocessor: object = field(init=True, default_factory=flg_preprocess.Preprocessor)
+    preprocessor: object = field(init=True, default_factory=flg_preprocess.Preprocessor2)
     seed = None
     
     #Input
-    n_ensemble = 4
+    n_ensemble = 1
     img_size = 640
-    prevent_ultralytics_resize = False
-    n_epochs = 30
-    model_name = 'yolov8m'
+    prevent_ultralytics_resize = True
+    n_epochs = 50
+    model_name = 'yolov9s'
     use_pretrained_weights = True    
-    fix_norm_bug = False
-    box_size = 24
+    fix_norm_bug = True
+    box_size = 18
     trust = 4
     negative_slice_ratio = 0.
-    negative_label_threshold = 1.
+    negative_label_threshold = 0.6
 
-    alternative_slice_selection = False
+    alternative_slice_selection = True
     trust_expanded = 6
     forbidden_range = 20 # if there is a motor inside forbidden_range but outside trust_expanded in z, discard this slice
 
@@ -79,7 +79,7 @@ class YOLOModel(fls.BaseClass):
     translate = 0.1
     scale = 0.5
     fliplr = 0.5
-    flipud = 0.0
+    flipud = 0.5
     degrees = 0.0    
     shear = 0.0
     perspective = 0.0
@@ -106,9 +106,9 @@ class YOLOModel(fls.BaseClass):
     
     def __post_init__(self):
         super().__post_init__()
-        self.preprocessor.scale_std = False
-        self.preprocessor.scale_percentile = True
-        self.preprocessor.return_uint8 = True
+        #self.preprocessor.scale_std = False
+        #self.preprocessor.scale_percentile = True
+        #self.preprocessor.return_uint8 = True
             
 
     
@@ -610,7 +610,7 @@ class YOLOModel(fls.BaseClass):
             all_detections = []
             for i_model,this_model in enumerate(self.trained_model):
 
-                selected_indices = np.linspace(0, data.data.shape[0]-1, int(data.data.shape[0] * self.concentration))
+                selected_indices = np.linspace(0, data.data.shape[0]-1, int(data.data.shape[0] // self.concentration))
                 selected_indices = np.round(selected_indices).astype(int)
                 #slice_files = [slice_files[i] for i in selected_indices]
                 

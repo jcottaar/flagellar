@@ -158,6 +158,8 @@ class ModelRunner(fls.BaseClass):
             # Infer
             if fls.env=='vast':
                 model.run_in_parallel = False
+            model.ratio_of_motors_allowed = np.sum([len(d.labels)>0 for d in self.test_data])/len(self.test_data)
+            print('ratio: ', model.ratio_of_motors_allowed)
             self.inferred_test_data = model.infer(self.test_data)       
             self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
             
