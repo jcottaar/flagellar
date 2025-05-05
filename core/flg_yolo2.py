@@ -200,9 +200,11 @@ class YOLOModel(fls.BaseClass):
                         after_y = max(0, self.img_size-normalized_img.shape[0])
                         normalized_img = np.pad(normalized_img, ((0,after_y),(0,after_x)), mode='constant', constant_values=127)
 
-                    x_start, x_end, x_scaling = find_coords(normalized_img.shape[1], self.img_size, poi_x)
-                    y_start, y_end, y_scaling = find_coords(normalized_img.shape[0], self.img_size, poi_y)
-                    normalized_img = normalized_img[y_start:y_end, x_start:x_end]
+                        x_start, x_end, x_scaling = find_coords(normalized_img.shape[1], self.img_size, poi_x)
+                        y_start, y_end, y_scaling = find_coords(normalized_img.shape[0], self.img_size, poi_y)
+                        normalized_img = normalized_img[y_start:y_end, x_start:x_end]
+                    else:
+                        x_start = 0; y_start = 0;
                     
                     dest_path = os.path.join(images_dir, dest_filename)
                     Image.fromarray(normalized_img).save(dest_path)        
