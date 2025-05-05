@@ -45,7 +45,7 @@ def test_unet(update_reference=False):
 
 def test_unet_alt(update_reference=False):
     train_data = fls.load_all_train_data()
-    model = flg_unet.UNetModel()
+    model = flg_unet.UNetModel()    
     model.deterministic_train = True
     model.n_images_per_update = 6
     model.dataset.size = (64,64,64)
@@ -57,6 +57,7 @@ def test_unet_alt(update_reference=False):
     model = flg_model.ThreeStepModel()
     model.step1Heatmap = model2
     #model.target_size = 320
+    model.preprocessor = flg_preprocess.Preprocessor()
     model.preprocessor.scale_percentile = True
     model.preprocessor.resize = True
     model.preprocessor.resize_target= 320
