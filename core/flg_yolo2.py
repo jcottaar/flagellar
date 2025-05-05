@@ -170,9 +170,31 @@ class YOLOModel(fls.BaseClass):
 
             # Set train and test
             np.random.shuffle(train_data_filtered)
+
             
             # Helper function to process a list of tomograms
             def process_tomogram_set(data_list, images_dir, labels_dir, set_name):
+                
+                def write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width):
+                    dest_path = os.path.join(images_dir, dest_filename)
+                    Image.fromarray(normalized_img).save(dest_path)        
+                    
+                    x_center = np.array(x_center)
+                    y_center = np.array(y_center)
+                    x_width = np.array(x_width)
+                    y_width = np.array(y_width)
+    
+                    label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
+                    with open(label_path, 'w') as f:
+                        for ii in range(x_center.shape[0]):
+                            img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
+                            x_center_norm = x_center[ii] / img_width
+                            y_center_norm = y_center[ii] / img_height
+                            box_width_norm = x_width[ii] / img_width
+                            box_height_norm = y_width[ii] / img_height
+                            f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
+
+                
                 if self.alternative_slice_selection:
                     neg_slice_counter = 0.
                     neg_ind = 0
@@ -197,36 +219,41 @@ class YOLOModel(fls.BaseClass):
                         self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
                         for i_z,z in enumerate(dd.slices_present):
                             normalized_img = dd.data[i_z,:,:]
-                            dest_filename = f"{data.name}_z{z:04d}.jpg"
-                            dest_path = os.path.join(images_dir, dest_filename)
-                            Image.fromarray(normalized_img).save(dest_path)                        
+                            dest_filename = f"{data.name}_z{z:04d}.jpg"                                            
     
-                            label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
-                            plt.figure()
-                            plt.imshow(normalized_img, cmap='bone')
-                            with open(label_path, 'w') as f:
-                                for i_row in range(len(data.labels)):
-                                    dist = np.abs(data.labels['z'][i_row]-z)
-                                    if np.abs(dist)<=self.trust_expanded:
-                                        x_center = data.labels['x'][i_row]*dd.resize_factor
-                                        y_center = data.labels['y'][i_row]*dd.resize_factor
-                                        img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
-                                        x_center_norm = x_center / img_width
-                                        y_center_norm = y_center / img_height
-                                        box_width_norm = self.box_size / img_width
-                                        box_height_norm = self.box_size / img_height
-                                        img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
-                                        f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
-                                        
-                                        x1 = (x_center_norm-box_width_norm/2)*normalized_img.shape[1]
-                                        x2 = (x_center_norm+box_width_norm/2)*normalized_img.shape[1]
-                                        y1 = (y_center_norm-box_height_norm/2)*normalized_img.shape[0]
-                                        y2 = (y_center_norm+box_height_norm/2)*normalized_img.shape[0]
-                                        import matplotlib
-                                        plt.gca().add_patch(matplotlib.patches.Rectangle((x1,y1), x2-x1,y2-y1, alpha=0.5, facecolor='blue'))
-                            plt.pause(0.001)
-                            #raise 'stop'
+                            
+                            #plt.figure()
+                            #plt.imshow(normalized_img, cmap='bone')
+                            x_center = []
+                            y_center = []
+                            x_width = []
+                            y_width = []
+                            
+                            for i_row in range(len(data.labels)):
+                                dist = np.abs(data.labels['z'][i_row]-z)
+                                if np.abs(dist)<=self.trust_expanded:
+                                    x_center.append(data.labels['x'][i_row]*dd.resize_factor)
+                                    y_center.append(data.labels['y'][i_row]*dd.resize_factor)
+                                    x_width.append(self.box_size)
+                                    y_width.append(self.box_size)
+                                    #
+                                    #x_center_norm = x_center / img_width
+                                    #y_center_norm = y_center / img_height
+                                    #box_width_norm = self.box_size / img_width
+                                    #box_height_norm = self.box_size / img_height
+                                    #img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
+                                    #f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
                                     
+                                    # x1 = (x_center_norm-box_width_norm/2)*normalized_img.shape[1]
+                                    # x2 = (x_center_norm+box_width_norm/2)*normalized_img.shape[1]
+                                    # y1 = (y_center_norm-box_height_norm/2)*normalized_img.shape[0]
+                                    # y2 = (y_center_norm+box_height_norm/2)*normalized_img.shape[0]
+                                    # import matplotlib
+                                    # plt.gca().add_patch(matplotlib.patches.Rectangle((x1,y1), x2-x1,y2-y1, alpha=0.5, facecolor='blue'))
+                            #plt.pause(0.001)
+                            #raise 'stop'
+
+                            write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width)
                             neg_slice_counter += self.negative_slice_ratio
                         while neg_slice_counter>=1:
                             while True:
