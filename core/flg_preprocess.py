@@ -191,6 +191,12 @@ class Preprocessor2(fls.BaseClass):
 
         data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
 
+        # Guess voxel spacing if not provided
+        if np.isnan(data.voxel_spacing):
+            xy_size = np.sqrt(data.data.shape[1]*data.data.shape[2])
+            data.voxel_spacing = (-8.71223429e-03)*xy_size + 2.33859781e+01
+            print('Guessed voxel spacing: ', data.voxel_spacing)
+
         fls.claim_gpu('cupy')
         while True:
             try:
@@ -241,8 +247,9 @@ class Preprocessor2(fls.BaseClass):
         # Blur
         for ii in range(img.shape[0]):
             img[ii,:,:] = cupyx.scipy.ndimage.gaussian_filter(img[ii,:,:], sigma = self.blur_xy/self.target_voxel_spacing)        
-        assert self.blur_z==0, 'todo'
-
+        for ii in range(img.shape[2]):
+            img[:,:,ii] = cupyx.scipy.ndimage.gaussian_filter(img[:,:,ii], sigma = (self.blur_z/data.voxel_spacing,0))
+            
         # Moving average scaling
         if self.scale_moving_average:
             moving_size = min(np.round(self.scale_moving_average_size / self.target_voxel_spacing).astype(int), min(img.shape[1]-4, img.shape[2]-4))
@@ -251,13 +258,13 @@ class Preprocessor2(fls.BaseClass):
             conv_matrix = conv_matrix/np.sum(conv_matrix)
             for ii in range(img.shape[0]):
                 arr = img[ii,...]
-                print(arr.shape, conv_matrix.shape)
+                #print(arr.shape, conv_matrix.shape)
                 moving_mean = cupyx.scipy.signal.fftconvolve(arr, conv_matrix, mode='same')  
-                print(moving_mean.shape)
+                #print(moving_mean.shape)
                 assert cp.max(moving_mean)>0
-                print(pad_size)
+                #print(pad_size)
                 moving_mean = moving_mean[pad_size:-pad_size,pad_size:-pad_size]
-                print(moving_mean.shape)
+                #print(moving_mean.shape)
                 moving_mean = cp.pad(moving_mean, ((pad_size,pad_size),(pad_size,pad_size)), mode='edge')
                 img[ii,...] = (img[ii,...] - moving_mean)                
         else:

@@ -43,6 +43,7 @@ class YOLOModel(fls.BaseClass):
     #Input
     n_ensemble = 4
     img_size = 640
+    prevent_ultralytics_resize = False
     n_epochs = 30
     model_name = 'yolov8m'
     use_pretrained_weights = True    
@@ -201,6 +202,8 @@ class YOLOModel(fls.BaseClass):
                             Image.fromarray(normalized_img).save(dest_path)                        
     
                             label_path = os.path.join(labels_dir, dest_filename.replace('.jpg', '.txt'))
+                            plt.figure()
+                            plt.imshow(normalized_img, cmap='bone')
                             with open(label_path, 'w') as f:
                                 for i_row in range(len(data.labels)):
                                     dist = np.abs(data.labels['z'][i_row]-z)
@@ -214,6 +217,16 @@ class YOLOModel(fls.BaseClass):
                                         box_height_norm = self.box_size / img_height
                                         img_width, img_height = (normalized_img.shape[1], normalized_img.shape[0])
                                         f.write(f"0 {x_center_norm} {y_center_norm} {box_width_norm} {box_height_norm}\n")
+                                        
+                                        x1 = (x_center_norm-box_width_norm/2)*normalized_img.shape[1]
+                                        x2 = (x_center_norm+box_width_norm/2)*normalized_img.shape[1]
+                                        y1 = (y_center_norm-box_height_norm/2)*normalized_img.shape[0]
+                                        y2 = (y_center_norm+box_height_norm/2)*normalized_img.shape[0]
+                                        import matplotlib
+                                        plt.gca().add_patch(matplotlib.patches.Rectangle((x1,y1), x2-x1,y2-y1, alpha=0.5, facecolor='blue'))
+                            plt.pause(0.001)
+                            #raise 'stop'
+                                    
                             neg_slice_counter += self.negative_slice_ratio
                         while neg_slice_counter>=1:
                             while True:
@@ -554,7 +567,7 @@ class YOLOModel(fls.BaseClass):
                                 for i_slice in sub_batch_slice_nums:
                                     data_in.append(data.data[i_slice,:,:,None])
                                     data_in[-1] = data_in[-1][:,:,[0,0,0]]
-                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True, imgsz=self.img_size)
+                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True, imgsz=image_size)
                             for j, result in enumerate(sub_results):
                                 result = result.cpu()
                                 all_conf = result.boxes.conf.numpy()#np.array([b.conf for b in result.boxes])
@@ -603,8 +616,13 @@ class YOLOModel(fls.BaseClass):
         if not self.fix_norm_bug:
             preprocessor.scale_std = False
             preprocessor.scale_percentile = False
-        preprocessor.load_and_preprocess(data)        
+        preprocessor.load_and_preprocess(data) 
 
+        if self.prevent_ultralytics_resize:
+            image_size = (np.round(max(data.data.shape[1],  data.data.shape[2])/32)*32).astype(int).item()
+        else:
+            image_size = self.img_size
+        print('image_size: ', image_size)
         
         cpu, device = fls.prep_pytorch(self.seed, True, False)
         BATCH_SIZE = 32
