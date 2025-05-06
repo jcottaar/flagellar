@@ -263,7 +263,6 @@ class YOLOModel(fls.BaseClass):
                                     dist = np.abs(data.negative_labels['z'][i_row]-i_slice)
                                     if np.abs(dist)<=self.forbidden_range:
                                         in_forbidden_range = True
-                                    print(data.negative_labels['suspect'][i_row]==1.)
                             if in_any_range and not in_forbidden_range:
                                 slices_to_do.append(i_slice)
                         if len(slices_to_do)==0:

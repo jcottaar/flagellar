@@ -111,6 +111,7 @@ def test_yolo(update_reference=False):
     model.step1Labels.trust = 1
     model.step1Labels.trust_neg = 1
     model.step1Labels.negative_slice_ratio = 0.1
+    model.step1Labels.remove_suspect_areas = True
     model.train(train_data[1:150], train_data[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
     test_yolo_infer(update_reference = update_reference)
