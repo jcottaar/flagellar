@@ -51,6 +51,7 @@ class YOLOModel(fls.BaseClass):
     fix_norm_bug = True
     box_size = 18
     trust = 4
+    trust_neg = 4
     negative_slice_ratio = 0.
     negative_label_threshold = 0.6
 
@@ -255,7 +256,7 @@ class YOLOModel(fls.BaseClass):
                             for i_row in range(len(data.negative_labels)):
                                 if data.negative_labels['confidence'][i_row]>self.negative_label_threshold:
                                     dist = np.abs(data.negative_labels['z'][i_row]-i_slice)
-                                    if np.abs(dist)<=self.trust:
+                                    if np.abs(dist)<=self.trust_neg:
                                         in_any_range = True
                             if in_any_range and not in_forbidden_range:
                                 slices_to_do.append(i_slice)
@@ -289,7 +290,7 @@ class YOLOModel(fls.BaseClass):
                             for i_row in range(len(data.negative_labels)):
                                 if data.negative_labels['confidence'][i_row]>self.negative_label_threshold:
                                     dist = np.abs(data.negative_labels['z'][i_row]-z)
-                                    if np.abs(dist)<=self.trust:                                 
+                                    if np.abs(dist)<=self.trust_neg:                                 
                                         if np.isnan(x_poi):
                                             x_poi = data.negative_labels['x'][i_row]*dd.resize_factor
                                             y_poi = data.negative_labels['y'][i_row]*dd.resize_factor

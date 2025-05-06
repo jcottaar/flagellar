@@ -243,7 +243,7 @@ class Preprocessor2(fls.BaseClass):
         # plt.colorbar()
         # print(target_shape, img.shape)
 
-        print(img.shape)
+        # print(img.shape)
 
         import cupyx.scipy.signal
         import cupyx.scipy.ndimage
