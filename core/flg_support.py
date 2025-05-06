@@ -289,7 +289,7 @@ class Data(BaseClass):
 class DataKaggle(Data):
 
     #@profile_each_line
-    def load_to_memory(self, desired_slices = None, pad_to_original_size = False):  
+    def load_to_memory(self, desired_slices = None, pad_to_original_size = False, allow_missing=False):  
     
         if self.loaded_state == 'memory': return
         
@@ -324,7 +324,7 @@ class DataKaggle(Data):
 class DataExtra(Data):
 
     #@profile_each_line
-    def load_to_memory(self, desired_slices = None, pad_to_original_size = False):  
+    def load_to_memory(self, desired_slices = None, pad_to_original_size = False, allow_missing=False):  
     
         if self.loaded_state == 'memory': return
 
@@ -346,15 +346,24 @@ class DataExtra(Data):
         else:
             self.data = np.zeros((len(desired_slices), self.data_shape[1], self.data_shape[2]))
             n_done = 0
+            inds_internal_done = []
+            inds_done = []
             for file_name, img in zip(files, imgs):
                 ind = int(file_name[-8:-4])
                 if (ind in desired_slices):                
                     ind_internal = desired_slices.index(ind)
                     self.data[ind_internal,:,:] = img
                     n_done += 1
-           
-            assert n_done == len(desired_slices)
-            self.slices_present = desired_slices
+                    inds_internal_done.append(ind_internal)
+                    inds_done.append(ind)
+
+            if not allow_missing:
+                assert n_done == len(desired_slices)
+                self.slices_present = desired_slices
+            else:
+                self.data = self.data[inds_internal_done,...]
+                self.slices_present = inds_done
+            
         
         self.loaded_state = 'memory'
         self.check_constraints()

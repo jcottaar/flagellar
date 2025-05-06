@@ -116,8 +116,10 @@ def animate_labels_full_slice(data_list, z_size):
     
 def animate_labels(data_list, sizes, tile_num=5, animate=True, preprocessor=None, collect_function = flg_numerics.collect_patches):
     if preprocessor is None:
-        preprocessor = flg_preprocess.Preprocessor()
+        preprocessor = flg_preprocess.Preprocessor2()
     mat = collect_function(data_list, np.array(sizes),preprocessor=preprocessor)[0]
+    if mat.shape[0]==0:
+        return
     mat = np.nanmean(mat,axis=1)[:,np.newaxis,:,:]   
     #print(mat.shape)
     #mat = np.reshape(mat, (-1, mat.shape[2], mat.shape[3]))
@@ -191,7 +193,7 @@ def show_tf_pn(inferred_data, reference_data):
     print(f'True positives: {len(to_plot)} out of {all_pos}')
     if len(to_plot)>64:
         to_plot = to_plot[:64]
-    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
+    animate_labels(to_plot, (5,50,50), tile_num=8, animate=False)
     plt.title('True positives')
 
     # False negatives - seen but not selected
@@ -199,16 +201,28 @@ def show_tf_pn(inferred_data, reference_data):
         d.labels_unfiltered = copy.deepcopy(d.labels_unfiltered2)
     fls.mark_tf_pn(inferred_data, reference_data)
     to_plot = []
+    to_plot2 = []
     for i,(d,r) in enumerate(zip(inferred_data,reference_data)):
         if len(d.labels_unfiltered)>0 and np.any(d.labels_unfiltered['tf_pn']==0) and (not i in done):
             assert(len(r.labels)==1)
             to_plot.append(r)
+            to_plot2.append(copy.deepcopy(d))
+            #print(to_plot2[-1].labels_unfiltered)
+            to_plot2[-1].labels = to_plot2[-1].labels_unfiltered[0:1]
+            # print('x')
+            # print(r.labels)
+            # print(to_plot2[-1].labels)
+            # print(r.data_shape)
             done.append(i)
-    print(f'False negatives - seen but not selected: {len(to_plot)} out of {all_pos}')
+    print(f'False negatives - seen but subthreshold or overshadowed: {len(to_plot)} out of {all_pos}')
     if len(to_plot)>64:
         to_plot = to_plot[:64]
-    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
-    plt.title('False negatives - seen but not selected')
+    if len(to_plot2)>64:
+        to_plot2 = to_plot2[:64]
+    animate_labels(to_plot, (5,100,100), tile_num=8, animate=False)
+    plt.title('False negatives - seen but subthreshold or overshadowed')
+    #animate_labels(to_plot2, (5,50,50), tile_num=8, animate=False)
+    #plt.title('False negatives - seen but not selected - what was taken instead')
 
 
     # False negatives - not seen
@@ -221,7 +235,7 @@ def show_tf_pn(inferred_data, reference_data):
     print(f'False negatives - not seen: {len(to_plot)} out of {all_pos}')
     if len(to_plot)>64:
         to_plot = to_plot[:64]
-    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
+    animate_labels(to_plot, (1,50,50), tile_num=8, animate=False)
     plt.title('False negatives - not seen')
 
     # False positives
@@ -243,7 +257,7 @@ def show_tf_pn(inferred_data, reference_data):
     print(f'False positives: {len(to_plot)} out of {all_neg}')
     if len(to_plot)>64:
         to_plot = to_plot[:64]
-    animate_labels(to_plot, (5,150,150), tile_num=8, normalize_slices=True, animate=False)
+    animate_labels(to_plot, (5,50,50), tile_num=8, animate=False)
     plt.title('False positives')
 
     

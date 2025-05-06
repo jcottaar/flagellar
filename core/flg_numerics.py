@@ -100,7 +100,7 @@ def collect_patches(data, sizes, preprocessor):
     collected = []
     is_edge = []
     
-    for d in data:        
+    for d in data:   
         for index,row in d.labels.iterrows():
             dd = copy.deepcopy(d)
             coords = np.array((np.round(row['z']).astype(int), np.round(row['y']).astype(int), np.round(row['x']).astype(int)))
@@ -108,7 +108,7 @@ def collect_patches(data, sizes, preprocessor):
             desired_slices = desired_slices[desired_slices>=0]
             desired_slices = desired_slices[desired_slices<dd.data_shape[0]]
             #dd.load_to_memory(desired_slices=list(desired_slices))            
-            preprocessor.load_and_preprocess(dd, desired_original_slices=list(desired_slices))
+            preprocessor.load_and_preprocess(dd, desired_original_slices=list(desired_slices), allow_missing = True)
             coords[0] = len(dd.slices_present)//2
             coords[1] = np.round(coords[1]*dd.resize_factor).astype(int)
             coords[2] = np.round(coords[2]*dd.resize_factor).astype(int)

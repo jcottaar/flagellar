@@ -53,9 +53,9 @@ class Preprocessor(fls.BaseClass):
     return_uint8 = False
 
     #@fls.profile_each_line
-    def load_and_preprocess(self, data, desired_original_slices = None):
+    def load_and_preprocess(self, data, desired_original_slices = None, allow_missing=False):
 
-        data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
+        data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size, allow_missing=allow_missing)
 
         fls.claim_gpu('cupy')
         while True:
@@ -188,9 +188,9 @@ class Preprocessor2(fls.BaseClass):
     clip_value = 3.
 
     #@fls.profile_each_line
-    def load_and_preprocess(self, data, desired_original_slices = None):
+    def load_and_preprocess(self, data, desired_original_slices = None, allow_missing=False):
 
-        data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size)
+        data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size, allow_missing=allow_missing)
 
         # Guess voxel spacing if not provided
         if np.isnan(data.voxel_spacing):
