@@ -23,16 +23,17 @@ def baseline_runner(fast_mode = False):
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
     res.modifier_dict['n_ensemble'] = pm(1, lambda r:1+2*r.integers(0,2), yolo)
-    res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(30,71)).item(), n_epochs)   
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(30,71)).item(), n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>0.5, use_best_epoch)   
 
-    res.base_model.train_data_selector.datasets = []
-    res.modifier_dict['tom'] = pm(True, lambda r:r.uniform()>0., add_dataset)
-    res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
-    res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
-    res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
+    res.base_model.train_data_selector.datasets = ['tom']
+    res.modifier_dict['extra_data'] = pm(False, lambda r:r.uniform()>0.5, add_all_datasets)
+    res.modifier_dict['trust_neg'] = pm(False, lambda r:r.integers(-1,2), yolo)
+    # res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
+    # res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
+    # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
 
-    model_list = ['yolov8m']
+    model_list = ['yolov8s', 'yolov8m', 'yolov8l']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     
     # res.modifier_dict['n_ensemble'] = pm(4, lambda r:r.integers(1,4), yolo)
@@ -82,12 +83,14 @@ def baseline_runner(fast_mode = False):
     # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
     if fast_mode:
         res.label = 'Baseline fast mode'
-        res.train_part = slice(0,30)
-        res.test_part = slice(0,13)
-        res.N_test_positive = 10
-        res.N_test_negative = 3
+        res.train_part = slice(0,100)
+        res.test_part = slice(None)
+        res.N_test_positive = 4
+        res.N_test_negative = 1
         res.base_model.step1Labels.n_epochs = 2
+        res.base_model.step1Labels.n_ensemble = 1
         del res.modifier_dict['n_epochs']
+        del res.modifier_dict['n_ensemble']
     return res
 
 @dataclass
@@ -214,6 +217,12 @@ def clusters(model, name, value):
 def add_dataset(model, name, value):
     if value:
         model.train_data_selector.datasets.append(name)
+
+def add_all_datasets(model, name, value):
+    if value:
+        model.train_data_selector.datasets.append('ycw')
+        model.train_data_selector.datasets.append('mba')
+        model.train_data_selector.datasets.append('aba')
 
 def use_best_epoch(model, name, value):
     model.step1Labels.use_best_epoch = value

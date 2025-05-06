@@ -51,8 +51,8 @@ class YOLOModel(fls.BaseClass):
     fix_norm_bug = True
     box_size = 18
     trust = 4
-    trust_neg = 4
-    remove_suspect_areas = False
+    trust_neg = 0
+    remove_suspect_areas = True
     negative_slice_ratio = 0.
     negative_label_threshold = 0.6
 
