@@ -184,8 +184,10 @@ def fourier_resample_nd(x: cp.ndarray, new_shape: tuple) -> cp.ndarray:
 
     # 1) Forward FFT
     Xf = fftn(x)
+    del x
     # 2) Shift zero-frequency to center
     Xf_shift = fftshift(Xf)
+    del Xf
 
     # 3) Prepare target freq array
     Yf_shift = cp.zeros(new_shape, dtype=Xf_shift.dtype)
@@ -206,17 +208,17 @@ def fourier_resample_nd(x: cp.ndarray, new_shape: tuple) -> cp.ndarray:
 
     # Copy the low-frequency region
     Yf_shift[tuple(dst_slices)] = Xf_shift[tuple(src_slices)]
+    del Xf_shift
 
     # 5) Inverse shift and inverse FFT
     Yf = ifftshift(Yf_shift)
+    del Yf_shift
     y  = ifftn(Yf)
+    del Yf
 
     # Normalize amplitude
     norm_factor = math.prod(new_shape) / math.prod(old_shape)
     y = y * norm_factor
 
     # 6) Return real part if input was real
-    if cp.isrealobj(x):
-        return cp.real(y)
-    else:
-        return y
+    return cp.real(y)
