@@ -109,6 +109,7 @@ def test_yolo(update_reference=False):
     model.step1Labels.img_size = 320
     model.step1Labels.alternative_slice_selection = True
     model.step1Labels.trust = 1
+    model.step1Labels.trust_neg = 1
     model.step1Labels.negative_slice_ratio = 0.1
     model.train(train_data[1:150], train_data[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
