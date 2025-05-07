@@ -372,6 +372,7 @@ class ThreeStepModelLabelBased(fls.Model):
 class TestTimeAugmentation(fls.Model):
     model_internal:fls.Model = field(init=True, default_factory=ThreeStepModelLabelBased)
     voxel_spacing_scale_vals: list = field(init=True, default_factory=lambda:[0.5, np.sqrt(0.5), 1., np.sqrt(2)])
+    rotation_vals: list = field(init=True, default_factory=lambda:[0,0,0,0])
 
     def _train(self, train_data, validation_data):
         self.model_internal.train(train_data, validation_data)

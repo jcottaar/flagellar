@@ -264,4 +264,46 @@ def show_tf_pn(inferred_data, reference_data):
     
     
             
-                                       
+
+def expand_and_reinfer(inferred_data, test_data, select_motors, ratio):
+    N = 10
+    inferred_data = inferred_data[:30]*N + inferred_data[30:]
+    test_data = test_data[:30]*N + test_data[30:]
+    ii=0
+    for dd,r in zip(inferred_data, test_data):
+        dd.name = dd.name+'_'+str(ii)
+        select_motors(dd)
+        r.name = r.name+'_'+str(ii)
+        ii+=1
+    
+    # ratio_vals = np.linspace(0.5,1,10)
+    # scores = []
+    # for ratio in ratio_vals:    
+    #     dat = copy.deepcopy(inferred_data)
+    #     all_vals = []
+    #     for dd in dat:
+    #         if len(dd.labels)==0:
+    #             all_vals.append(-np.inf)
+    #         else:
+    #             all_vals.append(dd.labels['value'][0])
+    #     inds = np.argsort(all_vals)
+    #     for ind in inds[:np.round(len(inds)*(1-ratio)).astype(int)]:
+    #         dat[ind].labels = dat[ind].labels[0:0]
+    #     scores.append(fls.score_competition_metric(dat, test_data)[2])
+    # plt.figure()
+    # plt.plot(ratio_vals, scores)
+    # plt.title(str(d['trust_neg']) + ' ' + str(d['extra_data']) + ' ' + str(d['seed']))
+    # plt.pause(0.001)
+
+    dat = copy.deepcopy(inferred_data)
+    all_vals = []
+    for dd in dat:
+        if len(dd.labels)==0:
+            all_vals.append(-np.inf)
+        else:
+            all_vals.append(dd.labels['value'][0])
+    inds = np.argsort(all_vals)
+    for ind in inds[:np.round(len(inds)*(1-ratio)).astype(int)]:
+        dat[ind].labels = dat[ind].labels[0:0]
+
+    return dat, test_data
