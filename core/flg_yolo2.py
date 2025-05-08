@@ -282,11 +282,12 @@ class YOLOModel(fls.BaseClass):
 
                             x_poi = np.nan
                             y_poi = np.nan
+                            print(data.labels)
                             for i_row in range(len(data.labels)):
                                 dist = np.abs(data.labels['z'][i_row]-z)
                                 if np.abs(dist)<=self.trust_expanded:
-                                    x_center.append(data.labels['x'][i_row]*dd.resize_factor)
-                                    y_center.append(data.labels['y'][i_row]*dd.resize_factor)
+                                    x_center.append(data.labels['x'][i_row])
+                                    y_center.append(data.labels['y'][i_row])                                    
                                     x_width.append(self.box_size)
                                     y_width.append(self.box_size)                                    
                                     if np.isnan(x_poi):
@@ -297,8 +298,8 @@ class YOLOModel(fls.BaseClass):
                                     dist = np.abs(data.negative_labels['z'][i_row]-z)
                                     if np.abs(dist)<=self.trust_neg:                                 
                                         if np.isnan(x_poi):
-                                            x_poi = data.negative_labels['x'][i_row]*dd.resize_factor
-                                            y_poi = data.negative_labels['y'][i_row]*dd.resize_factor
+                                            x_poi = data.negative_labels['x'][i_row]
+                                            y_poi = data.negative_labels['y'][i_row]
                             assert not np.isnan(x_poi)
                             write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width, x_poi, y_poi)
                             neg_slice_counter += self.negative_slice_ratio
@@ -655,6 +656,13 @@ class YOLOModel(fls.BaseClass):
                                             x1, y1, x2, y2 = result.boxes.xyxy[box_idx].cpu().numpy()
                                             x_center = (x1 + x2) / 2 / data.resize_factor
                                             y_center = (y1 + y2) / 2 / data.resize_factor
+                                            if self.preprocessor.apply_flipud:
+                                                y_center = data.data_shape[1]-y_center
+                                            if self.preprocessor.apply_transpose:
+                                                tmp = x_center
+                                                x_center = y_center
+                                                y_center = tmp
+                                            
                                             all_detections.append({
                                                 'z': round(data.slices_present[sub_batch_slice_nums[j]]),
                                                 'y': round(y_center),

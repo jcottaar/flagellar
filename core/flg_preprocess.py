@@ -185,6 +185,10 @@ class Preprocessor2(fls.BaseClass):
     scale_moving_std_size = 3000.
     blur_xy_moving_std = 60. # Angstrom
 
+    # Augmentation
+    apply_transpose = False
+    apply_flipud = False
+
     clip_value = 3.
 
     #@fls.profile_each_line
@@ -238,6 +242,12 @@ class Preprocessor2(fls.BaseClass):
                 n_x = n_x-1
             img[ii,:,:] = flg_numerics.fourier_resample_nd(old_img_list[ii][:n_y,:n_x], target_shape)
             img[ii,:,:] = cp.clip(img[ii,:,:], 0., 1.)
+        if len(data.labels)>0:
+            data.labels['x'] *= data.resize_factor
+            data.labels['y'] *= data.resize_factor
+        if len(data.negative_labels)>0:
+            data.negative_labels['x'] *= data.resize_factor
+            data.negative_labels['y'] *= data.resize_factor
         # plt.figure()
         # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
         # plt.colorbar()
@@ -317,6 +327,23 @@ class Preprocessor2(fls.BaseClass):
         for ii in range(img.shape[0]):
             img[ii,...] = (img[ii,...]+self.clip_value)/(2*self.clip_value)
             img[ii,...] = cp.clip(img[ii,...], 0., 1.)     
+
+        if self.apply_transpose:
+            img = cp.transpose(img, axes=(0,2,1))
+            if len(data.labels)>0:
+                tmp = data.labels['x'].to_numpy()
+                data.labels['x'] = data.labels['y'].to_numpy()
+                data.labels['y'] = tmp
+            if len(data.negative_labels)>0:
+                tmp = data.negative_labels['x'].to_numpy()
+                data.negative_labels['x'] = data.negative_labels['y'].to_numpy()
+                data.negative_labels['y'] = tmp            
+        if self.apply_flipud:
+            img = cp.flip(img, axis=1)
+            if len(data.labels)>0:
+                data.labels['y'] = img.shape[1]-data.labels['y']
+            if len(data.negative_labels)>0:
+                data.negative_labels['y'] = img.shape[1]-data.negative_labels['y']
 
         # plt.figure()
         # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
