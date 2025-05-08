@@ -269,6 +269,7 @@ class YOLOModel(fls.BaseClass):
                             continue
                         dd = copy.deepcopy(data)
                         self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
+                        print(dd.labels)
                         for i_z,z in enumerate(dd.slices_present):
                             normalized_img = dd.data[i_z,:,:]
                             dest_filename = f"{data.name}_z{z:04d}.jpg"                                            
@@ -282,24 +283,23 @@ class YOLOModel(fls.BaseClass):
 
                             x_poi = np.nan
                             y_poi = np.nan
-                            print(data.labels)
-                            for i_row in range(len(data.labels)):
-                                dist = np.abs(data.labels['z'][i_row]-z)
+                            for i_row in range(len(dd.labels)):
+                                dist = np.abs(dd.labels['z'][i_row]-z)
                                 if np.abs(dist)<=self.trust_expanded:
-                                    x_center.append(data.labels['x'][i_row])
-                                    y_center.append(data.labels['y'][i_row])                                    
+                                    x_center.append(dd.labels['x'][i_row])
+                                    y_center.append(dd.labels['y'][i_row])                                    
                                     x_width.append(self.box_size)
                                     y_width.append(self.box_size)                                    
                                     if np.isnan(x_poi):
                                         x_poi = x_center[-1]
                                         y_poi = y_center[-1]
-                            for i_row in range(len(data.negative_labels)):
-                                if data.negative_labels['confidence'][i_row]>self.negative_label_threshold:
-                                    dist = np.abs(data.negative_labels['z'][i_row]-z)
+                            for i_row in range(len(dd.negative_labels)):
+                                if dd.negative_labels['confidence'][i_row]>self.negative_label_threshold:
+                                    dist = np.abs(dd.negative_labels['z'][i_row]-z)
                                     if np.abs(dist)<=self.trust_neg:                                 
                                         if np.isnan(x_poi):
-                                            x_poi = data.negative_labels['x'][i_row]
-                                            y_poi = data.negative_labels['y'][i_row]
+                                            x_poi = dd.negative_labels['x'][i_row]
+                                            y_poi = dd.negative_labels['y'][i_row]
                             assert not np.isnan(x_poi)
                             write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width, x_poi, y_poi)
                             neg_slice_counter += self.negative_slice_ratio
