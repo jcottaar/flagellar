@@ -269,7 +269,6 @@ class YOLOModel(fls.BaseClass):
                             continue
                         dd = copy.deepcopy(data)
                         self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
-                        print(dd.labels)
                         for i_z,z in enumerate(dd.slices_present):
                             normalized_img = dd.data[i_z,:,:]
                             dest_filename = f"{data.name}_z{z:04d}.jpg"                                            
