@@ -266,6 +266,8 @@ def show_tf_pn(inferred_data, reference_data):
             
 
 def expand_and_reinfer(inferred_data, test_data, select_motors, ratio):
+    inferred_data = copy.deepcopy(inferred_data)
+    test_data = copy.deepcopy(test_data)
     N = 10
     inferred_data = inferred_data[:30]*N + inferred_data[30:]
     test_data = test_data[:30]*N + test_data[30:]
