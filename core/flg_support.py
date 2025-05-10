@@ -488,7 +488,7 @@ class Model(BaseClass):
 
     train_data_selector: object = field(init=True, default_factory = DataSelector)
     preprocessor: object = field(init=True, default = None)
-    ratio_of_motors_allowed: float = field(init=True, default=0.5)
+    ratio_of_motors_allowed: float = field(init=True, default=0.45)
 
     def __post_init__(self):
         super().__post_init__()

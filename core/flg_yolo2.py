@@ -60,11 +60,11 @@ class YOLOModel(fls.BaseClass):
     trust_expanded = 6
     forbidden_range = 20 # if there is a motor inside forbidden_range but outside trust_expanded in z, discard this slice
 
-    patience=10
-    use_best_epoch = True # else use last
+    patience=0
+    use_best_epoch = False # else use last
     lr0=0.001
-    lrf=0.01
-    cos_lr = True
+    lrf=1.
+    cos_lr = False
     weight_decay = 0.0005
     dropout= 0.0
     momentum=0.937
@@ -85,8 +85,8 @@ class YOLOModel(fls.BaseClass):
     degrees = 0.0    
     shear = 0.0
     perspective = 0.0
-    mosaic = 1.0
-    close_mosaic = 10
+    mosaic = 0.0
+    close_mosaic = 100000
     mixup = 0.2
     auto_augment = None
     erasing = 0.4

@@ -22,18 +22,18 @@ def baseline_runner(fast_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
-    res.modifier_dict['n_ensemble'] = pm(1, lambda r:1+2*r.integers(0,2), yolo)
+    res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
     res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(30,71)).item(), n_epochs)   
-    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>0.5, use_best_epoch)   
+    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
 
     res.base_model.train_data_selector.datasets = ['tom']
-    res.modifier_dict['extra_data'] = pm(False, lambda r:r.uniform()>0.5, add_all_datasets)
+    res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
     res.modifier_dict['trust_neg'] = pm(False, lambda r:r.integers(-1,2), yolo)
     # res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
     # res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
     # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
 
-    model_list = ['yolov8s', 'yolov8m', 'yolov8l']
+    model_list = ['yolov8s', 'yolov8m']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     
     # res.modifier_dict['n_ensemble'] = pm(4, lambda r:r.integers(1,4), yolo)
