@@ -511,6 +511,7 @@ class YOLOModel(fls.BaseClass):
     
                 # Update a setting
                 settings.update({"mlflow": False})
+                #settings.update({"seed": self.seed, "deterministic": True})
 
                 if self.multi_scale_training:
                     batch_size = 6
