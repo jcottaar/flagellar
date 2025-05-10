@@ -94,8 +94,6 @@ class YOLOModel(fls.BaseClass):
     crop_fraction = 1.0
     use_albumentations = False
 
-
-
     # infer
     confidence_threshold = 0.
     relative_confidence_threshold = 0.2
@@ -680,6 +678,7 @@ class YOLOModel(fls.BaseClass):
             #final_detections = perform_3d_nms(all_detections)
             #final_detections.sort(key=lambda x: x['confidence'], reverse=True)
 
+            #print(all_detections)
             return all_detections
             
             # if not final_detections:

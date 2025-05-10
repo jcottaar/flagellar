@@ -348,8 +348,13 @@ class ThreeStepModelLabelBased(fls.Model):
                 if d.name == data.name:
                     data.labels_unfiltered2 = d.labels_unfiltered2
 
-        self.step2Motors.min_confidence = self.step1Labels.confidence_threshold
-        self.step2Motors.n_models = self.step1Labels.n_ensemble
+        try: 
+            self.step2Motors.min_confidence = self.step1Labels.confidence_threshold
+            self.step2Motors.n_models = self.step1Labels.n_ensemble
+        except:
+            self.step2Motors.min_confidence = self.step1Labels.model_internal.confidence_threshold
+            self.step2Motors.n_models = self.step1Labels.model_internal.n_ensemble
+            
         data.labels_unfiltered = self.step2Motors.cluster(data) 
 
         #if fls.is_submission:
@@ -366,6 +371,29 @@ class ThreeStepModelLabelBased(fls.Model):
         #     plt.title(data.name)
         return data
 
+@dataclass
+class TestTimeAugmentationStep1(fls.Model):
+    model_internal:fls.Model = field(init=True, default_factory=ThreeStepModelLabelBased)
+    
+    def train(self, train_data, validation_data):
+        self.model_internal.train(train_data, validation_data)
+
+    def infer(self,data):
+        label_list = []
+        assert len(self.model_internal.trained_model) == self.model_internal.n_ensemble
+        for i_model in range(len(self.model_internal.trained_model)):
+            model = copy.deepcopy(self.model_internal)
+            model.trained_model = [model.trained_model[i_model]]
+            label_list.append(model.infer(copy.deepcopy(data)))            
+        labels = label_list[0]
+        labels['i_model'] = 0
+        for ii,lab in enumerate(label_list[1:]):
+            lab['i_model'] = ii+1
+            labels = pd.concat([labels, lab], ignore_index=True, sort=False)
+        print(labels)
+        if self.model_internal.final_relative_confidence_threshold:
+            labels = labels[labels['confidence']>self.model_internal.relative_confidence_threshold*np.max(labels['confidence'])]
+        return labels
 
 
 @dataclass
