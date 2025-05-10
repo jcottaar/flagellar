@@ -656,6 +656,8 @@ class YOLOModel(fls.BaseClass):
                                             y_center = (y1 + y2) / 2 / data.resize_factor
                                             if self.preprocessor.apply_flipud:
                                                 y_center = data.data_shape[1]-y_center
+                                            if self.preprocessor.apply_fliplr:
+                                                x_center = data.data_shape[2]-x_center
                                             if self.preprocessor.apply_transpose:
                                                 tmp = x_center
                                                 x_center = y_center

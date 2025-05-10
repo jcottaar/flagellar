@@ -375,6 +375,7 @@ class ThreeStepModelLabelBased(fls.Model):
 class TestTimeAugmentationStep1(fls.Model):
     model_internal:fls.Model = field(init=True, default_factory=ThreeStepModelLabelBased)
     flip_ud_vals:list = field(init=True, default_factory = lambda:[False,True])
+    flip_lr_vals:list = field(init=True, default_factory = lambda:[False,False,True,True])
     
     def train(self, train_data, validation_data):
         self.model_internal.train(train_data, validation_data)
@@ -384,11 +385,18 @@ class TestTimeAugmentationStep1(fls.Model):
         assert len(self.model_internal.trained_model) == self.model_internal.n_ensemble
         for i_model in range(len(self.model_internal.trained_model)):
             flip_ud_val = self.flip_ud_vals[i_model%len(self.flip_ud_vals)]
+            flip_lr_val = self.flip_lr_vals[i_model%len(self.flip_lr_vals)]
+            print(flip_ud_val, flip_lr_val)
             
             model = copy.deepcopy(self.model_internal)
             model.preprocessor.apply_flipud = flip_ud_val
+            model.preprocessor.apply_fliplr = flip_lr_val
             model.trained_model = [model.trained_model[i_model]]
-            label_list.append(model.infer(copy.deepcopy(data)))            
+            label_list.append(model.infer(copy.deepcopy(data)))     
+            if len(label_list[-1])>0:
+                print(i_model)
+                ind = np.argmax(label_list[-1]['confidence'])
+                print(label_list[-1][ind:ind+1])
         labels = label_list[0]
         labels['i_model'] = 0
         for ii,lab in enumerate(label_list[1:]):

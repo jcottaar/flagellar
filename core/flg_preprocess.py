@@ -188,6 +188,7 @@ class Preprocessor2(fls.BaseClass):
     # Augmentation
     apply_transpose = False
     apply_flipud = False
+    apply_fliplr = False
 
     clip_value = 3.
 
@@ -344,6 +345,12 @@ class Preprocessor2(fls.BaseClass):
                 data.labels['y'] = img.shape[1]-data.labels['y']
             if len(data.negative_labels)>0:
                 data.negative_labels['y'] = img.shape[1]-data.negative_labels['y']
+        if self.apply_fliplr:
+            img = cp.flip(img, axis=2)
+            if len(data.labels)>0:
+                data.labels['x'] = img.shape[2]-data.labels['x']
+            if len(data.negative_labels)>0:
+                data.negative_labels['x'] = img.shape[2]-data.negative_labels['x']
 
         # plt.figure()
         # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
