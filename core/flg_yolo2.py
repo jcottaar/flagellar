@@ -46,6 +46,7 @@ class YOLOModel(fls.BaseClass):
     img_size = 640
     prevent_ultralytics_resize = True
     n_epochs = 50
+    epochs_save: object = field(init=True, default_factory=list)
     model_name = 'yolov9s'
     use_pretrained_weights = True    
     fix_norm_bug = True
@@ -103,6 +104,7 @@ class YOLOModel(fls.BaseClass):
 
     # trained
     trained_model = 0
+    trained_model_per_epoch = 0
     train_results = 0
     
     def __post_init__(self):
@@ -495,6 +497,7 @@ class YOLOModel(fls.BaseClass):
                 results: Training results.
             """
             model_list =[]
+            trained_model_per_epoch = [ [] for e in self.epochs_save]
             train_results = []
             for i_ensemble in range(self.n_ensemble):
                 fls.remove_and_make_dir(yolo_weights_dir)
@@ -557,10 +560,17 @@ class YOLOModel(fls.BaseClass):
                 #    best_epoch, best_val_loss = best_epoch_info
                 #    print(f"\nBest model found at epoch {best_epoch} with validation DFL loss: {best_val_loss:.4f}")
 
+                files = glob.glob(fls.temp_dir + 'yolo_weights/motor_detector/weights/*.pt')
+                for f in files:
+                    strip_optimizer(f)
+
                 if self.use_best_epoch:
                     model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt'))
                 else:
                     model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/last.pt'))
+
+                for e,listt in zip(self.epochs_save, self.trained_model_per_epoch):
+                    listt.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/epoch' +str(e)+ '.pt'))
                 
 
             self.trained_model = model_list
@@ -753,4 +763,64 @@ class YOLOModel(fls.BaseClass):
         #     data.labels = data.labels[0:0]
 
         #return data
-                
+
+import argparse
+import os
+from datetime import datetime
+from pathlib import Path
+
+import torch
+
+
+def strip_optimizer(f, s="", updates=None):
+    """
+    Function to strip optimizer from a model to reduce its size.
+
+    Args:
+        f (str | Path): Path to the model file to optimize.
+        s (str, optional): Path to save the optimized model. If not specified, overwrites the input file.
+        updates (dict, optional): Updates to add to the checkpoint.
+
+    Returns:
+        dict: Updated checkpoint dictionary.
+    """
+    try:
+        # Load model on CPU
+        x = torch.load(f, map_location=torch.device("cpu"))
+        assert isinstance(x, dict), "Checkpoint is not a Python dictionary"
+        assert "model" in x, "Checkpoint does not contain 'model'"
+    except Exception as e:
+        print(f"Error: {f} is not a valid Ultralytics model: {e}")
+        return {}
+
+    # Add metadata
+    metadata = {
+        "date": datetime.now().isoformat(),
+        "optimized_by": "batch_optimize_models.py",
+    }
+
+    # Update model
+    if x.get("ema"):
+        x["model"] = x["ema"]  # Replace with EMA model
+    if hasattr(x["model"], "args"):
+        x["model"].args = dict(x["model"].args)  # Convert IterableSimpleNamespace to dict
+    if hasattr(x["model"], "criterion"):
+        x["model"].criterion = None  # Remove loss criterion
+    x["model"].half()  # Convert to FP16
+    for p in x["model"].parameters():
+        p.requires_grad = False  # Disable gradient calculation
+
+    # Remove unnecessary keys
+    for k in ["optimizer", "best_fitness", "ema", "updates"]:
+        x[k] = None
+    x["epoch"] = -1
+
+    # Save
+    combined = {**metadata, **x, **(updates or {})}
+    torch.save(combined, s or f)
+
+    # Calculate file size (in MB)
+    mb = os.path.getsize(s or f) / 1e6
+    print(f"Optimizer stripped: {f}{f' -> {s}' if s else ''}, {mb:.1f}MB")
+
+    return combined

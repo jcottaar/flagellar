@@ -22,80 +22,54 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
-    res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(30,71)).item(), n_epochs)   
+
+
+    print('8 ensemble, 141 epochs')
+    res.base_model.step1Labels.epochs_save = [20,40]
+    res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:41, n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
-    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-2.5)), yolo)  
-    res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
-    res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
-    res.modifier_dict['mosaic'] = pm(0., lambda r:1.0*(r.uniform()>0.5), yolo)  
-    res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
-
-    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,7.5), yolo)
-
-    res.base_model.train_data_selector.datasets = ['tom']
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:0.001, yolo)  
+    res.modifier_dict['cos_lr'] = pm(False, lambda r:False, cos_lr)  
+    res.modifier_dict['mosaic'] = pm(0., lambda r:0., yolo)  
+    res.modifier_dict['concentration'] = pm(1, lambda r:2, yolo)  
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
-    res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(-1,2), yolo)
-    res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(0,5), yolo)
-    # res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
-    # res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
-    # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
-
-    model_list = ['yolov8s', 'yolov8m']
+    res.modifier_dict['trust_neg'] = pm(0, lambda r:0, yolo)
+    res.modifier_dict['trust_extra'] = pm(4, lambda r:4, yolo)
+    model_list = ['yolov8m']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
+    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:rng.uniform()>0.5, yolo)
 
-    res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
-    res.modifier_dict['blur_z'] = pm(0., lambda r:r.uniform(0.,15.), prep)
-    res.modifier_dict['scale_moving_std'] = pm(30, lambda r:r.uniform()>0.5, prep)
-
-    res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.5), yolo)
     
-    # res.modifier_dict['n_ensemble'] = pm(4, lambda r:r.integers(1,4), yolo)
-    # res.modifier_dict['scale_approach'] = pm(1, lambda r:r.integers(0,4), set_scale_approach)
-    # res.modifier_dict['scale_percentile_value'] = pm(2., lambda r:r.uniform(3.,5.), prep)    
-    # res.modifier_dict['moving_ratio'] = pm(0.2, lambda r:r.uniform(0.1,0.3), prep)
-    # res.modifier_dict['scale_std_clip_value'] = pm(3., lambda r:r.uniform(1.6,2.2), prep)
-    # res.modifier_dict['blur_z'] = pm(1, lambda r:max(1,1+2*r.integers(0,4)), prep) 
-    # res.modifier_dict['img_size'] = pm(640, lambda r:(640+64*r.integers(-2,3)).item(), yolo)
-    # res.modifier_dict['n_epochs'] = pm(30, lambda r:(r.integers(20,71)).item(), n_epochs)   
-    # res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-4,-2.75)), yolo)  
-    # res.modifier_dict['use_best_epoch'] = pm(True, lambda r:r.uniform()>1., use_best_epoch)   
-    # model_list = ['yolov8s', 'yolov8m', 'yolov8l', 'yolov9s', 'yolov9m', 'yolov10s', 'yolov10m', 'yolo11s', 
-    #              'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m', 'yolov8m']
-    # res.modifier_dict['model_name'] = pm('yolov8m', lambda r:model_list[r.integers(0,len(model_list))], yolo)
-    # res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.2, yolo)
-    # res.modifier_dict['box_size'] = pm(24, lambda r:r.integers(20,28).item(), yolo)
-    # res.modifier_dict['trust'] = pm(4, lambda r:r.integers(1,6).item(), yolo)
-    # res.modifier_dict['multi_scale_training'] = pm(False, lambda r:r.uniform()>1., yolo)   
-    # res.modifier_dict['fix_norm_bug'] = pm(False, lambda r:r.uniform()>0., yolo)
-    # res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0000,0.0006), yolo)
-    # res.modifier_dict['hsv_h'] = pm(0.015, lambda r:0.015*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['hsv_s'] = pm(0.7, lambda r:0.7*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['hsv_v'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.8), yolo)
-    # res.modifier_dict['scale'] = pm(0.5, lambda r:0.5*(r.uniform()>0.8), yolo)
-    # res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['flipud'] = pm(0., lambda r:0.5*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['degrees'] = pm(0., lambda r:0.*(r.uniform()>0.8), yolo)
-    # res.modifier_dict['shear'] = pm(0., lambda r:0.*(r.uniform()>0.8), yolo)
-    # res.modifier_dict['mosaic'] = pm(1.0, lambda r:1.0*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['mixup'] = pm(0.2, lambda r:0.2*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.2), yolo)
-    # res.modifier_dict['use_albumentations'] = pm(False, lambda r:(r.uniform()>0.5), yolo)
-    # #res.modifier_dict['confidence_threshold'] = pm(0.45, lambda r:0.45, yolo)#r.uniform(0.35,0.55), setattr)
-    # res.modifier_dict['include_multi_motor'] = pm(True, lambda r:r.uniform()>0., data_sel)
-    # res.modifier_dict['alternative_slice_selection'] = pm(False, lambda r:r.uniform()>0.2, yolo)
-    # res.modifier_dict['negative_slice_ratio'] = pm(0., lambda r:(r.uniform()>0.5)*r.uniform(0,1.), yolo)
-    # res.modifier_dict['ratio_of_motors_allowed'] = pm(1., lambda r:r.uniform(0.45,0.6), setattr)
-    # res.modifier_dict['relative_confidence_threshold'] = pm(0.2, lambda r:r.uniform(0.15,0.25), yolo)
-    # res.modifier_dict['distance_threshold'] = pm(100., lambda r:r.uniform(0.01, 25.), clusters)
+    # res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
+    # res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(30,71)).item(), n_epochs)   
+    # res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
+    # res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-2.5)), yolo)  
+    # res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
+    # res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
+    # res.modifier_dict['mosaic'] = pm(0., lambda r:1.0*(r.uniform()>0.5), yolo)  
+    # res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
 
-    # res.base_model.train_data_selector.datasets = []
-    # res.modifier_dict['tom'] = pm(True, lambda r:r.uniform()>0., add_dataset)
-    # res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
-    # res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
-    # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
-    res.do_inference = local_mode
+    # res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,7.5), yolo)
+
+    # res.base_model.train_data_selector.datasets = ['tom']
+    # res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
+    # res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(-1,2), yolo)
+    # res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(0,5), yolo)
+
+    # model_list = ['yolov8s', 'yolov8m']
+    # res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
+
+    # res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
+    # res.modifier_dict['blur_z'] = pm(0., lambda r:r.uniform(0.,15.), prep)
+    # res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
+
+    # res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.5), yolo)
+
+
+
+    
+    res.do_inference = False
     if local_mode:
         res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
         res.modifier_dict['extra_data'] = pm(False, lambda r:False, add_all_datasets)
@@ -140,7 +114,8 @@ class ModelRunner(fls.BaseClass):
     exception = 0
             
     def run(self):
-        try: 
+        try:
+            
             # Split train and test data
             all_data = fls.load_all_train_data() + fls.load_all_extra_data()
             np.random.default_rng(seed=0).shuffle(all_data)
@@ -184,6 +159,7 @@ class ModelRunner(fls.BaseClass):
             #return
     
             # Train model
+            print('XXX', np.sum([len(d.labels)>0 for d in self.test_data])/len(self.test_data))
             if self.train_in_subprocess:
                 model = model.train_subprocess(self.train_data, self.test_data)
             else:
