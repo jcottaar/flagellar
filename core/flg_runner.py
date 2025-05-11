@@ -157,7 +157,7 @@ class ModelRunner(fls.BaseClass):
                 print(self.modifier_values)
                 if len(model.train_data_selector.datasets)>0:
                     break
-            self.step1Labels.epochs_save = list(np.arange(30,self.step1Labels.n_epochs,30))
+            self.untrained_model.step1Labels.epochs_save = list(np.arange(30,self.untrained_model.step1Labels.n_epochs,30))
             #return
     
             # Train model
