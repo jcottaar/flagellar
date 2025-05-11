@@ -44,13 +44,13 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
     res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(30,71)).item(), n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
-    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-2.5)), yolo)  
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-3.)), yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
-    res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
+    #res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
     res.modifier_dict['mosaic'] = pm(0., lambda r:1.0*(r.uniform()>0.5), yolo)  
     res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
 
-    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,7.5), yolo)
+    #res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,7.5), yolo)
 
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
@@ -61,11 +61,11 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, pretrained_weights)
 
-    res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
-    res.modifier_dict['blur_z'] = pm(0., lambda r:r.uniform(0.,15.), prep)
-    res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
+    #res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
+    #res.modifier_dict['blur_z'] = pm(0., lambda r:r.uniform(0.,15.), prep)
+    #res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
 
-    res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.5), yolo)
+    #res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.5), yolo)
 
 
 
