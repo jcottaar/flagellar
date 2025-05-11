@@ -18,7 +18,7 @@ import sklearn.mixture
 import sklearn.gaussian_process
 import h5py
 
-def baseline_runner(fast_mode = False):
+def baseline_runner(fast_mode = False, local_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
@@ -27,11 +27,13 @@ def baseline_runner(fast_mode = False):
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-2.5)), yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
-    res.modifier_dict['mosaic'] = pm(0, lambda r:(r.uniform()>0.5).astype(float).item(), yolo)  
+    res.modifier_dict['mosaic'] = pm(0, lambda r:1.0*(r.uniform()>0.5), yolo)  
+    res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
 
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
     res.modifier_dict['trust_neg'] = pm(False, lambda r:r.integers(-1,2), yolo)
+    res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(0,5), yolo)
     # res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
     # res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
     # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
@@ -41,6 +43,8 @@ def baseline_runner(fast_mode = False):
 
     res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
     res.modifier_dict['scale_moving_std'] = pm(30, lambda r:r.uniform()>0.5, prep)
+
+    res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.5), yolo)
     
     # res.modifier_dict['n_ensemble'] = pm(4, lambda r:r.integers(1,4), yolo)
     # res.modifier_dict['scale_approach'] = pm(1, lambda r:r.integers(0,4), set_scale_approach)
@@ -87,6 +91,10 @@ def baseline_runner(fast_mode = False):
     # res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
     # res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
     # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
+    res.do_inference = local_mode
+    if local_mode:
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
+        res.modifier_dict['extra_data'] = pm(False, lambda r:False, add_all_datasets)
     if fast_mode:
         res.label = 'Baseline fast mode'
         res.train_part = slice(0,100)
@@ -114,6 +122,7 @@ class ModelRunner(fls.BaseClass):
     train_part: slice = field(init=True, default_factory = lambda:slice(None,None,None))
     test_part: slice = field(init=True, default_factory = lambda:slice(None,None,None))
     train_in_subprocess = True
+    do_inference = True
 
     # Outputs    
     git_commit_id: str = field(init=False, default = '')
@@ -182,8 +191,11 @@ class ModelRunner(fls.BaseClass):
                 model.run_in_parallel = False
             model.ratio_of_motors_allowed = np.sum([len(d.labels)>0 for d in self.test_data])/len(self.test_data)
             print('ratio: ', model.ratio_of_motors_allowed)
-            self.inferred_test_data = model.infer(self.test_data)       
-            self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
+            if self.do_inference:
+                self.inferred_test_data = model.infer(self.test_data)       
+                self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
+            else:
+                self.cv_score = 0.1
             
         except Exception as e:
             print('ERROR!')

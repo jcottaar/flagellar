@@ -620,8 +620,9 @@ class YOLOModel(fls.BaseClass):
             all_detections = []
             for i_model,this_model in enumerate(self.trained_model):
 
-                selected_indices = np.linspace(0, data.data.shape[0]-1, int(data.data.shape[0] // self.concentration))
-                selected_indices = np.round(selected_indices).astype(int)
+                #selected_indices = np.linspace(i_model%self.concentration, data.data.shape[0]-1, int(data.data.shape[0] // self.concentration))
+                #selected_indices = np.round(selected_indices).astype(int)
+                selected_indices = np.arange(i_model%self.concentration, data.data.shape[0], self.concentration)
                 #slice_files = [slice_files[i] for i in selected_indices]
                 
                 print(f"Processing {len(selected_indices)} out of {data.data.shape[0]} slices (CONCENTRATION={self.concentration})")
