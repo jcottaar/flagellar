@@ -497,7 +497,7 @@ class YOLOModel(fls.BaseClass):
                 results: Training results.
             """
             model_list =[]
-            trained_model_per_epoch = [ [] for e in self.epochs_save]
+            self.trained_model_per_epoch = [ [] for e in self.epochs_save]
             train_results = []
             for i_ensemble in range(self.n_ensemble):
                 fls.remove_and_make_dir(yolo_weights_dir)
@@ -569,6 +569,7 @@ class YOLOModel(fls.BaseClass):
                 else:
                     model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/last.pt'))
 
+                print(self.epochs_save)
                 for e,listt in zip(self.epochs_save, self.trained_model_per_epoch):
                     listt.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/epoch' +str(e)+ '.pt'))
                 

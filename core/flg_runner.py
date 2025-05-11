@@ -38,7 +38,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     # res.modifier_dict['trust_extra'] = pm(4, lambda r:4, yolo)
     # model_list = ['yolov8m']
     # res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
-    # res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:rng.uniform()>0.5, yolo)
+    # res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, yolo)
 
     
     res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
@@ -176,7 +176,7 @@ class ModelRunner(fls.BaseClass):
                 self.inferred_test_data = model.infer(self.test_data)       
                 self.cv_score = fls.score_competition_metric(self.inferred_test_data, self.test_data)
             else:
-                self.cv_score = 0.1
+                self.cv_score = [0.1,0.1,0.1]
             
         except Exception as e:
             print('ERROR!')
