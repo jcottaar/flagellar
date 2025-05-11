@@ -70,7 +70,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
 
     
-    res.do_inference = False
+    res.do_inference = local_mode
     if local_mode:
         res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
         res.modifier_dict['extra_data'] = pm(False, lambda r:False, add_all_datasets)
