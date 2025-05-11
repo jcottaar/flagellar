@@ -51,6 +51,7 @@ class YOLOModel(fls.BaseClass):
     fix_norm_bug = True
     box_size = 18
     trust = 4
+    trust_extra = 4
     trust_neg = 0
     remove_suspect_areas = True
     negative_slice_ratio = 0.
@@ -242,13 +243,17 @@ class YOLOModel(fls.BaseClass):
                     neg_slice_selector = np.random.default_rng(seed=self.seed)
                     assert self.trust_expanded >= self.trust
                     for data in tqdm(data_list):
+                        if 'tom' in data.name:
+                            this_trust = self.trust
+                        else:
+                            this_trust = self.trust_extra
                         slices_to_do = []
                         for i_slice in range(data.data_shape[0]):
                             in_any_range = False
                             in_forbidden_range = False
                             for i_row in range(len(data.labels)):
                                 dist = np.abs(data.labels['z'][i_row]-i_slice)
-                                if np.abs(dist)<=self.trust:
+                                if np.abs(dist)<=this_trust:
                                     in_any_range = True
                                 if np.abs(dist)>=self.trust_expanded and np.abs(dist)<=self.forbidden_range:
                                     in_forbidden_range = True
