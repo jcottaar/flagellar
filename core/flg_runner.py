@@ -27,12 +27,15 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-2.5)), yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
-    res.modifier_dict['mosaic'] = pm(0, lambda r:1.0*(r.uniform()>0.5), yolo)  
+    res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
+    res.modifier_dict['mosaic'] = pm(0., lambda r:1.0*(r.uniform()>0.5), yolo)  
     res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
+
+    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,7.5), yolo)
 
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
-    res.modifier_dict['trust_neg'] = pm(False, lambda r:r.integers(-1,2), yolo)
+    res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(-1,2), yolo)
     res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(0,5), yolo)
     # res.modifier_dict['mba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
     # res.modifier_dict['aba'] = pm(False, lambda r:r.uniform()>0.5, add_dataset)
@@ -42,6 +45,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
 
     res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
+    res.modifier_dict['blur_z'] = pm(0., lambda r:r.uniform(0.,15.), prep)
     res.modifier_dict['scale_moving_std'] = pm(30, lambda r:r.uniform()>0.5, prep)
 
     res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.5), yolo)
@@ -93,15 +97,15 @@ def baseline_runner(fast_mode = False, local_mode = False):
     # res.modifier_dict['ycw'] = pm(False, lambda r:r.uniform()>0.8, add_dataset)
     res.do_inference = local_mode
     if local_mode:
-        res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
         res.modifier_dict['extra_data'] = pm(False, lambda r:False, add_all_datasets)
     if fast_mode:
         res.label = 'Baseline fast mode'
-        res.train_part = slice(0,100)
+        res.train_part = slice(0,400)
         res.test_part = slice(None)
-        res.N_test_positive = 4
+        res.N_test_positive = 20
         res.N_test_negative = 1
-        res.base_model.step1Labels.n_epochs = 2
+        res.base_model.step1Labels.n_epochs = 10
         res.base_model.step1Labels.n_ensemble = 1
         del res.modifier_dict['n_epochs']
         del res.modifier_dict['n_ensemble']
@@ -266,6 +270,6 @@ def cos_lr(model,name,value):
     model.step1Labels.cos_lr = value
     if value:
         model.step1Labels.lrf = 0.01
-        model.step1Labels.n_epochs = np.round(model.step1Labels.n_epochs*1.2).astype(int)
+        model.step1Labels.n_epochs = np.round(model.step1Labels.n_epochs*1.2).astype(int).item()
             
         
