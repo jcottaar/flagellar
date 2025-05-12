@@ -41,11 +41,11 @@ def baseline_runner(fast_mode = False, local_mode = False):
     # res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, yolo)
 
     
-    res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(30,71)).item(), n_epochs)   
+    res.modifier_dict['n_ensemble'] = pm(1, lambda r:1+3*(r.uniform()>0.5), yolo)
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,71)).item(), n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
-    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.5,-3.)), yolo)  
-    res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.2,-3.)), yolo)  
+    res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
     #res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
     res.modifier_dict['mosaic'] = pm(0., lambda r:1.0*(r.uniform()>0.5), yolo)  
     res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
@@ -54,12 +54,12 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
-    res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(-1,2), yolo)
+    res.modifier_dict['trust_neg'] = pm(0, lambda r:1, yolo)
     res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(0,5), yolo)
 
     model_list = ['yolov8s', 'yolov8m']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
-    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, pretrained_weights)
+    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
     #res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
     #res.modifier_dict['blur_z'] = pm(0., lambda r:r.uniform(0.,15.), prep)
@@ -70,7 +70,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
 
     
-    res.do_inference = local_mode
+    res.do_inference = True
     if local_mode:
         res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
         res.modifier_dict['extra_data'] = pm(False, lambda r:False, add_all_datasets)
