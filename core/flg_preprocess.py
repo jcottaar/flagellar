@@ -144,7 +144,7 @@ class Preprocessor(fls.BaseClass):
             #print(img.shape)
 
             data.data_shape = img.shape
-            data.voxel_spacing = data.voxel_spacing/data.resize_factor
+            #data.voxel_spacing = data.voxel_spacing/data.resize_factor
         else:
             data.resize_factor = 1.
         

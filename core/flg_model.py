@@ -274,15 +274,15 @@ class FindClusters(fls.BaseClass):
             #print(this_detections)
             #print('------')
             conf_per_model = []
+            print('------------------')
             for i_model in range(self.n_models):
                 this_detections_this_model = this_detections[this_detections['i_model']==i_model]
-                #print('------------------')
-                #print(this_detections_this_model)
-                #print('------------------')
+                print(this_detections_this_model)
                 if len(this_detections_this_model)==0:
                     conf_per_model.append(self.min_confidence)
                 else:
                     conf_per_model.append(np.max(this_detections_this_model['confidence']))
+            print('------------------')
             conf = np.mean(conf_per_model)
             final_detections.append({'z':this_detections['z'][0], 'y':this_detections['y'][0], 'x':this_detections['x'][0], 'confidence':conf})
             #print('FINAL')
@@ -300,6 +300,130 @@ class FindClusters(fls.BaseClass):
             return pd.DataFrame(final_detections)
 
 
+@dataclass
+class FindClustersMultiZ(fls.BaseClass):
+    distance_threshold = 10.
+    min_confidence = np.nan
+    n_models = np.nan
+    z_range = 1e-10
+    #std_factor = 0.
+    gamma = 1.
+
+    def cluster(self, data):
+        """
+        Perform 3D Non-Maximum Suppression on detections to merge nearby motors.
+        """       
+        detections = data.labels_unfiltered2.to_dict('records')
+        if not detections:
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
+        detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)        
+    
+        zyx = []
+        for d in detections:
+            zyx.append([d['z'], d['y'], d['x']])
+        zyx = np.array(zyx)
+    
+        import sklearn.cluster
+        clustering = sklearn.cluster.DBSCAN(eps=self.distance_threshold, min_samples=1).fit(zyx)
+    
+        detections = pd.DataFrame(detections)
+        final_detections = []
+        for lab in np.unique(clustering.labels_):
+            this_detections = detections[clustering.labels_==lab].reset_index()
+            #print('---')
+            #print(this_detections)
+            mean_z = np.round(np.sum(this_detections['z'] * this_detections['confidence']) / np.sum(this_detections['confidence'])).astype(int)
+            mean_y = np.round(np.sum(this_detections['y'] * this_detections['confidence']) / np.sum(this_detections['confidence'])).astype(int)
+            mean_x = np.round(np.sum(this_detections['x'] * this_detections['confidence']) / np.sum(this_detections['confidence'])).astype(int)
+            #print(mean_z)
+
+            all_scores_this_motor = []
+            weights = []
+            ran = np.round(self.z_range).astype(int)
+            for z in np.arange(mean_z-ran, mean_z+ran+1):
+                for i_model in range(self.n_models):
+                    this_lab = this_detections[np.logical_and(this_detections['z']==z, this_detections['i_model']==i_model)]
+                    weight = np.exp(-(mean_z-z)**2/(2*self.z_range**2))
+                    weight = 1
+                    if len(this_lab)==0:
+                        all_scores_this_motor.append(0)
+                    else:
+                        all_scores_this_motor.append((np.max(this_lab['confidence'])**self.gamma) *weight)
+                    weights.append(weight)
+            final_score = np.sum(all_scores_this_motor)/np.sum(weights)#+self.std_factor*np.std(all_scores_this_motor)
+            final_detections.append({'z':mean_z, 'y':mean_y, 'x':mean_x, 'confidence':final_score, 'all_scores':all_scores_this_motor})
+    
+        if len(final_detections)==0:
+            print('FINAL')
+            print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores']))
+            print('')
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores'])
+        else:
+            print('FINAL')
+            print(pd.DataFrame(final_detections))
+            print('')
+            return pd.DataFrame(final_detections)
+
+@dataclass
+class FindClustersMultiZSimple(fls.BaseClass):
+    distance_threshold = 10.
+    min_confidence = np.nan
+    n_models = np.nan
+    #z_range = 1e-10
+    #std_factor = 0.
+    #gamma = 1.
+
+    def cluster(self, data):
+        """
+        Perform 3D Non-Maximum Suppression on detections to merge nearby motors.
+        """       
+        detections = data.labels_unfiltered2.to_dict('records')
+        if not detections:
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
+        detections = sorted(detections, key=lambda x: x['confidence'], reverse=True)        
+    
+        zyx = []
+        for d in detections:
+            zyx.append([d['z'], d['y'], d['x']])
+        zyx = np.array(zyx)
+    
+        import sklearn.cluster
+        clustering = sklearn.cluster.DBSCAN(eps=self.distance_threshold, min_samples=1).fit(zyx)
+    
+        detections = pd.DataFrame(detections)
+        final_detections = []
+        for lab in np.unique(clustering.labels_):
+            this_detections = detections[clustering.labels_==lab].reset_index()
+            #print('---')
+            #print(this_detections)
+            mean_z = np.round(np.sum(this_detections['z'] * this_detections['confidence']) / np.sum(this_detections['confidence'])).astype(int)
+            mean_y = np.round(np.sum(this_detections['y'] * this_detections['confidence']) / np.sum(this_detections['confidence'])).astype(int)
+            mean_x = np.round(np.sum(this_detections['x'] * this_detections['confidence']) / np.sum(this_detections['confidence'])).astype(int)
+            #print(mean_z)
+
+            all_scores_this_motor = []
+            weights = []
+            for z in np.unique(this_detections['z']):
+                for i_model in range(self.n_models):
+                    this_lab = this_detections[np.logical_and(this_detections['z']==z, this_detections['i_model']==i_model)]
+                    if len(this_lab)==0:
+                        all_scores_this_motor.append(0)
+                    else:
+                        all_scores_this_motor.append(np.max(this_lab['confidence']))
+            final_score = np.sum(all_scores_this_motor)*data.voxel_spacing #+self.std_factor*np.std(all_scores_this_motor)
+            final_detections.append({'z':mean_z, 'y':mean_y, 'x':mean_x, 'confidence':final_score, 'all_scores':all_scores_this_motor})
+    
+        if len(final_detections)==0:
+            print('FINAL')
+            print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores']))
+            print('')
+            return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores'])
+        else:
+            print('FINAL')
+            print(pd.DataFrame(final_detections))
+            print('')
+            return pd.DataFrame(final_detections)
+            
 @dataclass
 class ThreeStepModelLabelBased(fls.Model):
     # Runs modeling in 2 steps:
