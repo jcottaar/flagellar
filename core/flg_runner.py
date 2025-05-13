@@ -82,7 +82,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
     # Augmentation
-    res.modifier_dict['mosaic_mode'] = pm(0, lambda r:r.uniform(), mosaic) 
+    res.modifier_dict['mosaic_mode'] = pm(0, lambda r:r.uniform(), mosaic_mode) 
     res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.5), yolo) 
     res.modifier_dict['scale'] = pm(0.5, lambda r:r.uniform(0.25,0.6), yolo)
     res.modifier_dict['mixup'] = pm(0.2, lambda r:r.uniform(0,0.2), yolo)
@@ -94,6 +94,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
 
     # Post processing
+    res.modifier_dict['absolute_threshold'] = pm(False, lambda r:r.uniform()>0.5, absolute_threshold)
     res.modifier_dict['distance_threshold'] = pm(10., lambda r:r.uniform(10.,20.), clusters) 
     res.modifier_dict['z_range'] = pm(0, lambda r:r.integers(3,7), clusters) 
     
@@ -118,7 +119,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
         res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
     if fast_mode:
         res.label = 'Baseline fast mode'
-        res.train_part = slice(0,400)
+        res.train_part = slice(0,40)
         res.test_part = slice(None)
         res.N_test_positive = 20
         res.N_test_negative = 1
@@ -310,3 +311,8 @@ def mosaic_mode(model,name,value):
     else:
         model.step1Labels.mosaic = 1.0
         model.step1Labels.close_mosaic = 100000
+
+def absolute_threshold(model,name,value):
+    if value:
+        model.step1Labels.relative_confidence_threshold = 0.
+        model.step1Labels.confidence_threshold = 0.01
