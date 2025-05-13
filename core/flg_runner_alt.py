@@ -68,7 +68,12 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
     # Post processing
-    res.modifier_dict['z_range'] = pm(0, lambda r:4, clusters) 
+    def z_range_func(r):
+        if r.uniform()<0.4:
+            return -1
+        else:
+            return r.integers(3,7)
+    res.modifier_dict['z_range'] = pm(0, z_range_func, z_range) 
     
 
     
@@ -288,3 +293,10 @@ def absolute_threshold(model,name,value):
     if value:
         model.step1Labels.relative_confidence_threshold = 0.
         model.step1Labels.confidence_threshold = 0.01
+
+def z_range(model,name,value):
+    if value>=0:
+        model.step2Motors = flg_model.FindClustersMultiZ()
+        model.step2Motors.z_range = value
+        print('range: ', model.step2Motors.z_range)
+        

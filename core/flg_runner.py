@@ -22,7 +22,6 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
-    res.base_model.step2Motors = flg_model.FindClustersMultiZ()
 
 
     # print('8 ensemble, 141 epochs')
@@ -43,7 +42,10 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
        
     # Ensemble
-    res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
+    if local_mode:
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:r.integers(1,2), yolo)
+    else:
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
     res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
     
     # Data
@@ -56,6 +58,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     # Preprocessing
     res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:r.uniform(20.,25.), prep)
     res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
+    res.modifier_dict['blur_z'] = pm(0., lambda r:15.*(r.uniform()>0.5), prep)
     res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
     res.modifier_dict['scale_moving_average_size'] = pm(3000, lambda r:r.integers(2000,4000), prep)
     res.modifier_dict['scale_moving_std_size_fac'] = pm(1., lambda r:r.uniform(1,1.5), scale_moving_std_size_fac)
@@ -92,11 +95,17 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['hsv_v'] = pm(0.4, lambda r:r.uniform(0,0.4), yolo)
     res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
     res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
+    res.modifier_dict['degrees'] = pm(0., lambda r:10.*(r.uniform()>0.5), yolo)   
 
     # Post processing
     res.modifier_dict['absolute_threshold'] = pm(False, lambda r:r.uniform()>0.5, absolute_threshold)
     res.modifier_dict['distance_threshold'] = pm(10., lambda r:r.uniform(10.,20.), clusters) 
-    res.modifier_dict['z_range'] = pm(0, lambda r:r.integers(3,7), clusters) 
+    def z_range_func(r):
+        if r.uniform()<0.4:
+            return -1
+        else:
+            return r.integers(3,7)
+    res.modifier_dict['z_range'] = pm(0, z_range_func, z_range) 
     
 
     
@@ -114,9 +123,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
 
     
-    res.do_inference = True
-    if local_mode:
-        res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
+    res.do_inference = True    
     if fast_mode:
         res.label = 'Baseline fast mode'
         res.train_part = slice(0,40)
@@ -316,3 +323,10 @@ def absolute_threshold(model,name,value):
     if value:
         model.step1Labels.relative_confidence_threshold = 0.
         model.step1Labels.confidence_threshold = 0.01
+
+def z_range(model,name,value):
+    if value>=0:
+        model.step2Motors = flg_model.FindClustersMultiZ()
+        model.step2Motors.z_range = value
+        print('range: ', model.step2Motors.z_range)
+        
