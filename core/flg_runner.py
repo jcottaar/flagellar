@@ -22,6 +22,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res = ModelRunner()
     res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
+    res.base_model.step2Motors = flg_model.FindClustersMultiZ()
 
 
     # print('8 ensemble, 141 epochs')
@@ -40,30 +41,72 @@ def baseline_runner(fast_mode = False, local_mode = False):
     # res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     # res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, yolo)
 
-    
-    res.modifier_dict['n_ensemble'] = pm(1, lambda r:1+3*(r.uniform()>0.5), yolo)
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,71)).item(), n_epochs)   
-    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
-    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.2,-3.)), yolo)  
-    res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
-    #res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
-    res.modifier_dict['mosaic'] = pm(0., lambda r:1.0*(r.uniform()>0.5), yolo)  
+       
+    # Ensemble
+    res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
     res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
-
-    #res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,7.5), yolo)
-
+    
+    # Data
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
-    res.modifier_dict['trust_neg'] = pm(0, lambda r:1, yolo)
+    res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(0,3), yolo)
     res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(0,5), yolo)
+    res.modifier_dict['negative_label_threshold'] = pm(0.6, lambda r:r.uniform(0.6,0.65), yolo)
 
-    model_list = ['yolov8s', 'yolov8m']
+    # Preprocessing
+    res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:r.uniform(20.,25.), prep)
+    res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
+    res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
+    res.modifier_dict['scale_moving_average_size'] = pm(3000, lambda r:r.integers(2000,4000), prep)
+    res.modifier_dict['scale_moving_std_size_fac'] = pm(1., lambda r:r.uniform(1,1.5), scale_moving_std_size_fac)
+    res.modifier_dict['blur_xy_moving_std'] = pm(60., lambda r:r.uniform(0.,60.), prep)
+    res.modifier_dict['clip_value'] = pm(3., lambda r:r.uniform(2.5,3.5), prep)
+    res.modifier_dict['scale_percentile_value'] = pm(3., lambda r:r.uniform(2.,4.), prep)
+    res.modifier_dict['img_size'] = pm(640, lambda r:32*r.integers(15,21), yolo)
+    res.modifier_dict['box_size'] = pm(18, lambda r:r.integers(14,30), yolo)
+
+    # Learning
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,71)).item(), n_epochs)   
+    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.2,-2.8)), yolo)  
+    res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
+    res.modifier_dict['dropout'] = pm(0., lambda r:(r.uniform(0.,0.1)) * (r.uniform()>0.5), yolo)  
+    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0001, 0.0006), yolo)  
+
+    # Cost function
+    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(4.,7.5), yolo)
+
+    # Model
+    model_list = ['yolov8s', 'yolov8m', 'yolov10s', 'yolov10m']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
-    #res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
+    # Augmentation
+    res.modifier_dict['mosaic_mode'] = pm(0, lambda r:r.uniform(), mosaic) 
+    res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.5), yolo) 
+    res.modifier_dict['scale'] = pm(0.5, lambda r:r.uniform(0.25,0.6), yolo)
+    res.modifier_dict['mixup'] = pm(0.2, lambda r:r.uniform(0,0.2), yolo)
+    res.modifier_dict['erasing'] = pm(0.4, lambda r:r.uniform(0,0.4), yolo)
+    res.modifier_dict['hsv_h'] = pm(0.015, lambda r:r.uniform(0,0.015), yolo)
+    res.modifier_dict['hsv_s'] = pm(0.7, lambda r:r.uniform(0,0.7), yolo)
+    res.modifier_dict['hsv_v'] = pm(0.4, lambda r:r.uniform(0,0.4), yolo)
+    res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
+    res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
+
+    # Post processing
+    res.modifier_dict['distance_threshold'] = pm(10., lambda r:r.uniform(10.,20.), clusters) 
+    res.modifier_dict['z_range'] = pm(0, lambda r:r.integers(3,7), clusters) 
+    
+
+    
+
+    
+    
+    
+
+    
     #res.modifier_dict['blur_z'] = pm(0., lambda r:r.uniform(0.,15.), prep)
-    #res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
+    
 
     #res.modifier_dict['erasing'] = pm(0.4, lambda r:0.4*(r.uniform()>0.5), yolo)
 
@@ -72,8 +115,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     
     res.do_inference = True
     if local_mode:
-        res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
-        res.modifier_dict['extra_data'] = pm(False, lambda r:False, add_all_datasets)
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
     if fast_mode:
         res.label = 'Baseline fast mode'
         res.train_part = slice(0,400)
@@ -254,4 +296,17 @@ def pretrained_weights(model,name,value):
     model.step1Labels.use_pretrained_weights = value
     if not value:
         model.step1Labels.n_epochs = np.round(model.step1Labels.n_epochs*1.5).astype(int).item()
-        
+
+def scale_moving_std_size_fac(model,name,value):
+    model.step1Labels.preprocessor.scale_moving_std_size = np.round(model.step1Labels.preprocessor.scale_moving_average_size * value).astype(int)
+
+def mosaic_mode(model,name,value):
+    if value<0.33333:
+        model.step1Labels.mosaic = 0.0
+        model.step1Labels.close_mosaic = 100000
+    elif value<0.666667:
+        model.step1Labels.mosaic = 1.0
+        model.step1Labels.close_mosaic = model.step1Labels.n_epochs//2
+    else:
+        model.step1Labels.mosaic = 1.0
+        model.step1Labels.close_mosaic = 100000
