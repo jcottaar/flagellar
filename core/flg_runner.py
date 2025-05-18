@@ -69,7 +69,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['box_size'] = pm(18, lambda r:r.integers(14,30), yolo)
 
     # Learning
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,71)).item(), n_epochs)   
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,51)).item(), n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.2,-2.8)), yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
