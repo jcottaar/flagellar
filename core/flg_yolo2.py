@@ -71,6 +71,7 @@ class YOLOModel(fls.BaseClass):
     dropout= 0.0
     momentum=0.937
     multi_scale_training = False
+    warmup_epochs = 3.
     
 
     box=7.5
@@ -541,6 +542,7 @@ class YOLOModel(fls.BaseClass):
                     weight_decay=self.weight_decay,  # Prevent overfitting
                     dropout= self.dropout,
                     momentum=self.momentum,  # Momentum for better gradient updates
+                    warmup_epochs = self.warmup_epochs,
                     multi_scale = self.multi_scale_training,
                     close_mosaic=self.close_mosaic,  # Disable mosaic augmentation after 10 epochs
                     box = self.box,

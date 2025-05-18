@@ -45,8 +45,8 @@ def baseline_runner(fast_mode = False, local_mode = False):
     if local_mode:
         res.modifier_dict['n_ensemble'] = pm(1, lambda r:r.integers(1,2), yolo)
     else:
-        res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
-    res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,3), yolo)  
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
+    res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,2), yolo)  
     
     # Data
     res.base_model.train_data_selector.datasets = ['tom']
@@ -73,8 +73,11 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.2,-2.8)), yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
+    res.modifier_dict['lrf'] = pm(0.01, lambda r:10**(r.uniform(-2,-1)), yolo)  
     res.modifier_dict['dropout'] = pm(0., lambda r:(r.uniform(0.,0.1)) * (r.uniform()>0.5), yolo)  
-    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0.0001, 0.0006), yolo)  
+    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0, 0.0006), yolo)  
+    res.modifier_dict['momentum'] = pm(0.937, lambda r:r.uniform(0.917,0.957), yolo)
+    res.modifier_dict['warmup_epochs'] = pm(3., lambda r:r.integers(2,6).item(), yolo)
 
     # Cost function
     res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(4.,7.5), yolo)
@@ -106,6 +109,14 @@ def baseline_runner(fast_mode = False, local_mode = False):
         else:
             return r.integers(3,7)
     res.modifier_dict['z_range'] = pm(0, z_range_func, z_range) 
+    res.modifier_dict['adjust_voxel_scale'] = pm(1., lambda r:r.uniform(0.8,1.2), adjust_prep_multiply)
+    res.modifier_dict['adjust_voxel_scale'].modify_after_train = True
+    res.modifier_dict['adjust_clip_value'] = pm(1., lambda r:r.uniform(0.7,1.3), adjust_prep_multiply)
+    res.modifier_dict['adjust_clip_value'].modify_after_train = True
+    res.modifier_dict['adjust_blur_xy'] = pm(1., lambda r:r.uniform(0.7,1.3), adjust_prep_multiply)
+    res.modifier_dict['adjust_blur_xy'].modify_after_train = True
+    res.modifier_dict['adjust_blur_z'] = pm(1., lambda r:(r.uniform()>0.5)*r.uniform(0,15), adjust_prep_add)
+    res.modifier_dict['adjust_blur_z'].modify_after_train = True
     
 
     
@@ -202,7 +213,8 @@ class ModelRunner(fls.BaseClass):
                         self.modifier_values[key] = value.random_function(rng)
                     else:
                         self.modifier_values[key] = value.missing_value
-                    value.modifier_function(model, key, self.modifier_values[key])
+                    if not value.modify_after_train:
+                        value.modifier_function(model, key, self.modifier_values[key])
                 model.step1Labels.epochs_save = list(np.arange(30,model.step1Labels.n_epochs,30))
                 self.untrained_model = copy.deepcopy(model)
                 print(self.modifier_values)
@@ -212,16 +224,18 @@ class ModelRunner(fls.BaseClass):
             #return
     
             # Train model
-            print('XXX', np.sum([len(d.labels)>0 for d in self.test_data])/len(self.test_data))
             if self.train_in_subprocess:
                 model = model.train_subprocess(self.train_data, self.test_data)
             else:
                 model.train(self.train_data, self.test_data)
+            for key, value in self.modifier_dict.items():  
+                if value.modify_after_train:
+                    value.modifier_function(model, key, self.modifier_values[key])
             self.trained_model = copy.deepcopy(model)
 
             # Infer
             if fls.env=='vast':
-                model.run_in_parallel = False
+                model.run_in_parallel = False            
             model.ratio_of_motors_allowed = np.sum([len(d.labels)>0 for d in self.test_data])/len(self.test_data)
             print('ratio: ', model.ratio_of_motors_allowed)
             if self.do_inference:
@@ -252,6 +266,7 @@ class PropertyModifier(fls.BaseClass):
     missing_value = 0 # value to assume for this if it's missing in older output
     random_function = 0 # gets RNG as input, should return a new value
     modifier_function = 0 # gets model, name (in dict), and value as input, should adapt model (does not have to return)    
+    modify_after_train = False
 
 def prep(model, name, value):
     setattr(model.step1Labels.preprocessor, name, value)
@@ -330,4 +345,8 @@ def z_range(model,name,value):
         model.step2Motors = flg_model.FindClustersMultiZ()
         model.step2Motors.z_range = value
         print('range: ', model.step2Motors.z_range)
-        
+
+def adjust_prep_multiply(model,name,value):
+    setattr(model.step1Labels.preprocessor, name[7:], value*getattr(model.step1Labels.preprocessor, name[7:]))
+def adjust_prep_add(model,name,value):
+    setattr(model.step1Labels.preprocessor, name[7:], value+getattr(model.step1Labels.preprocessor, name[7:]))

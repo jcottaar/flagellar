@@ -289,14 +289,14 @@ class FindClusters(fls.BaseClass):
             #print(final_detections)
     
         if len(final_detections)==0:
-            #print('FINAL')
-            #print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model']))
-            #print('')
+            print('FINAL')
+            print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model']))
+            print('')
             return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
         else:
-            #print('FINAL')
-            #print(pd.DataFrame(final_detections))
-            #print('')
+            print('FINAL')
+            print(pd.DataFrame(final_detections))
+            print('')
             return pd.DataFrame(final_detections)
 
 
@@ -354,14 +354,14 @@ class FindClustersMultiZ(fls.BaseClass):
             final_detections.append({'z':mean_z, 'y':mean_y, 'x':mean_x, 'confidence':final_score, 'all_scores':all_scores_this_motor})
     
         if len(final_detections)==0:
-           # print('FINAL')
-           # print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores']))
-           # print('')
+            print('FINAL')
+            print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores']))
+            print('')
             return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores'])
         else:
-           # print('FINAL')
-           # print(pd.DataFrame(final_detections))
-           # print('')
+            print('FINAL')
+            print(pd.DataFrame(final_detections))
+            print('')
             return pd.DataFrame(final_detections)
 
 @dataclass
