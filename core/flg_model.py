@@ -274,29 +274,29 @@ class FindClusters(fls.BaseClass):
             #print(this_detections)
             #print('------')
             conf_per_model = []
-            print('------------------')
+            #print('------------------')
             for i_model in range(self.n_models):
                 this_detections_this_model = this_detections[this_detections['i_model']==i_model]
-                print(this_detections_this_model)
+                #print(this_detections_this_model)
                 if len(this_detections_this_model)==0:
                     conf_per_model.append(self.min_confidence)
                 else:
                     conf_per_model.append(np.max(this_detections_this_model['confidence']))
-            print('------------------')
+           # print('------------------')
             conf = np.mean(conf_per_model)
             final_detections.append({'z':this_detections['z'][0], 'y':this_detections['y'][0], 'x':this_detections['x'][0], 'confidence':conf})
             #print('FINAL')
             #print(final_detections)
     
         if len(final_detections)==0:
-            print('FINAL')
-            print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model']))
-            print('')
+            #print('FINAL')
+            #print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model']))
+            #print('')
             return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model'])
         else:
-            print('FINAL')
-            print(pd.DataFrame(final_detections))
-            print('')
+            #print('FINAL')
+            #print(pd.DataFrame(final_detections))
+            #print('')
             return pd.DataFrame(final_detections)
 
 
@@ -354,14 +354,14 @@ class FindClustersMultiZ(fls.BaseClass):
             final_detections.append({'z':mean_z, 'y':mean_y, 'x':mean_x, 'confidence':final_score, 'all_scores':all_scores_this_motor})
     
         if len(final_detections)==0:
-            print('FINAL')
-            print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores']))
-            print('')
+           # print('FINAL')
+           # print(pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores']))
+           # print('')
             return pd.DataFrame(columns=['z', 'y', 'x', 'confidence', 'i_model', 'all_scores'])
         else:
-            print('FINAL')
-            print(pd.DataFrame(final_detections))
-            print('')
+           # print('FINAL')
+           # print(pd.DataFrame(final_detections))
+           # print('')
             return pd.DataFrame(final_detections)
 
 @dataclass

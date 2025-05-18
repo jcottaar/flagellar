@@ -203,10 +203,11 @@ class ModelRunner(fls.BaseClass):
                     else:
                         self.modifier_values[key] = value.missing_value
                     value.modifier_function(model, key, self.modifier_values[key])
+                model.step1Labels.epochs_save = list(np.arange(30,model.step1Labels.n_epochs,30))
                 self.untrained_model = copy.deepcopy(model)
                 print(self.modifier_values)
                 if len(model.train_data_selector.datasets)>0:
-                    break
+                    break            
             self.untrained_model.step1Labels.epochs_save = list(np.arange(30,self.untrained_model.step1Labels.n_epochs,30))
             #return
     

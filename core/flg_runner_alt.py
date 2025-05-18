@@ -54,7 +54,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
     # Learning
     res.modifier_dict['n_epochs'] = pm(50, lambda r:30, n_epochs)   
-    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
+    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:True, use_best_epoch)   
     res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
  
     # Cost function
@@ -62,7 +62,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     # Model
     model_list = ['rtdetr-l']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
-    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
+    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:True, pretrained_weights)
 
     
 
@@ -166,11 +166,11 @@ class ModelRunner(fls.BaseClass):
                     else:
                         self.modifier_values[key] = value.missing_value
                     value.modifier_function(model, key, self.modifier_values[key])
+                model.step1Labels.epochs_save = list(np.arange(30,model.step1Labels.n_epochs,30))
                 self.untrained_model = copy.deepcopy(model)
                 print(self.modifier_values)
                 if len(model.train_data_selector.datasets)>0:
-                    break
-            self.untrained_model.step1Labels.epochs_save = list(np.arange(30,self.untrained_model.step1Labels.n_epochs,30))
+                    break            
             #return
     
             # Train model
