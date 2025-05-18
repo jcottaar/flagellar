@@ -83,7 +83,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(4.,7.5), yolo)
 
     # Model
-    model_list = ['yolov8s', 'yolov8m', 'yolov10s', 'yolov10m']
+    model_list = ['yolov8s', 'yolov8m', 'yolov10s', 'yolov10m', 'yolo11s', 'yolo11m']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
