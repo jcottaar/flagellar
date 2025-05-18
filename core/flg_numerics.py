@@ -77,6 +77,7 @@ def collect_patches_neg(data, sizes, preprocessor, n_collect):
             continue
         dd = copy.deepcopy(d)
         coords = np.array((np.round(neg_labels['z'][i_row]).astype(int), np.round(neg_labels['y'][i_row]).astype(int), np.round(neg_labels['x'][i_row]).astype(int)))
+        print(coords)
         desired_slices = np.arange(coords[0]-sizes[0], coords[0]+sizes[0]+1)
         desired_slices = desired_slices[desired_slices>=0]
         desired_slices = desired_slices[desired_slices<dd.data_shape[0]]
@@ -94,7 +95,82 @@ def collect_patches_neg(data, sizes, preprocessor, n_collect):
     collected = np.stack(collected)
     is_edge = np.array(is_edge)
     return collected, is_edge
-        
+
+def collect_patches_xz_transposed(data, sizes, preprocessor):    
+    collected = []
+    is_edge = []
+    
+    for d in data:   
+        dd = copy.deepcopy(d)
+        if len(d.labels)>0:
+            preprocessor.apply_transpose_xz = True
+            preprocessor.load_and_preprocess(dd)
+            print(dd.data.shape)
+        for index,row in d.labels.iterrows():
+            
+            coords = np.array((np.round(row['x']).astype(int), np.round(row['y']).astype(int), np.round(row['z']).astype(int)))
+            print(coords)
+            #desired_slices = np.arange(coords[0]-sizes[0], coords[0]+sizes[0]+1)
+            #desired_slices = desired_slices[desired_slices>=0]
+            #desired_slices = desired_slices[desired_slices<dd.data_shape[0]]
+            #dd.load_to_memory(desired_slices=list(desired_slices))    
+            
+            coords[0] = np.round(coords[0]).astype(int)
+            coords[1] = np.round(coords[1]*dd.resize_factor).astype(int)
+            coords[2] = np.round(coords[2]*dd.resize_factor).astype(int)
+            #is_edge.append(not np.all(np.logical_and(coords >= sizes, coords <= np.array(np.shape(f['data'])) - sizes - 1)))
+            is_edge = np.nan # todo
+            #to_append = copy.deepcopy(data_ext[coords[0]+3:coords[0]+2*sizes[0]+4,coords[1]+3:coords[1]+2*sizes[1]+4,coords[2]+3:coords[2]+2*sizes[2]+4])
+            #to_append = to_append - np.mean(to_append)
+               
+            to_append = copy.deepcopy(extract_patch(dd.data, coords, sizes, constant_value=np.nan))            
+            # if normalize_slices:
+            #      mean_list = np.nanmean(to_append, axis=(1,2))#extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+            #      std_list = np.nanstd(to_append, axis=(1,2))#extract_patch(d.std_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+            #      to_append = (to_append-mean_list[:,np.newaxis,np.newaxis])/std_list[:,np.newaxis,np.newaxis]
+            collected.append( to_append )                     
+
+    collected = np.stack(collected)
+    is_edge = np.array(is_edge)
+    return collected, is_edge
+
+def collect_patches_yz_transposed(data, sizes, preprocessor):    
+    collected = []
+    is_edge = []
+    
+    for d in data:   
+        dd = copy.deepcopy(d)
+        if len(d.labels)>0:
+            preprocessor.apply_transpose_yz = True
+            preprocessor.load_and_preprocess(dd)
+            print(dd.data.shape)
+        for index,row in d.labels.iterrows():
+            
+            coords = np.array((np.round(row['y']).astype(int), np.round(row['z']).astype(int), np.round(row['x']).astype(int)))
+            print(coords)
+            #desired_slices = np.arange(coords[0]-sizes[0], coords[0]+sizes[0]+1)
+            #desired_slices = desired_slices[desired_slices>=0]
+            #desired_slices = desired_slices[desired_slices<dd.data_shape[0]]
+            #dd.load_to_memory(desired_slices=list(desired_slices))    
+            
+            coords[0] = np.round(coords[0]).astype(int)
+            coords[1] = np.round(coords[1]*dd.resize_factor).astype(int)
+            coords[2] = np.round(coords[2]*dd.resize_factor).astype(int)
+            #is_edge.append(not np.all(np.logical_and(coords >= sizes, coords <= np.array(np.shape(f['data'])) - sizes - 1)))
+            is_edge = np.nan # todo
+            #to_append = copy.deepcopy(data_ext[coords[0]+3:coords[0]+2*sizes[0]+4,coords[1]+3:coords[1]+2*sizes[1]+4,coords[2]+3:coords[2]+2*sizes[2]+4])
+            #to_append = to_append - np.mean(to_append)
+               
+            to_append = copy.deepcopy(extract_patch(dd.data, coords, sizes, constant_value=np.nan))            
+            # if normalize_slices:
+            #      mean_list = np.nanmean(to_append, axis=(1,2))#extract_patch(d.mean_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+            #      std_list = np.nanstd(to_append, axis=(1,2))#extract_patch(d.std_per_slice, coords[:1], sizes[:1], constant_value=np.nan)
+            #      to_append = (to_append-mean_list[:,np.newaxis,np.newaxis])/std_list[:,np.newaxis,np.newaxis]
+            collected.append( to_append )                     
+
+    collected = np.stack(collected)
+    is_edge = np.array(is_edge)
+    return collected, is_edge
 
 def collect_patches(data, sizes, preprocessor):    
     collected = []
@@ -104,6 +180,7 @@ def collect_patches(data, sizes, preprocessor):
         for index,row in d.labels.iterrows():
             dd = copy.deepcopy(d)
             coords = np.array((np.round(row['z']).astype(int), np.round(row['y']).astype(int), np.round(row['x']).astype(int)))
+            print(coords)
             desired_slices = np.arange(coords[0]-sizes[0], coords[0]+sizes[0]+1)
             desired_slices = desired_slices[desired_slices>=0]
             desired_slices = desired_slices[desired_slices<dd.data_shape[0]]

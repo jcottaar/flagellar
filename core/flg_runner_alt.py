@@ -43,17 +43,14 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
        
     # Ensemble
-    res.modifier_dict['n_ensemble'] = pm(1, lambda r:4, yolo)
+    res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
     res.modifier_dict['concentration'] = pm(1, lambda r:1, yolo)  
     
     # Data
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
     res.modifier_dict['trust_neg'] = pm(0, lambda r:1, yolo)
-    res.modifier_dict['trust_extra'] = pm(4, lambda r:2, yolo)
-
-    res.modifier_dict['blur_z'] = pm(0., lambda r:15.*(r.uniform()>0.5), prep)
-    res.modifier_dict['degrees'] = pm(0., lambda r:10.*(r.uniform()>0.5), yolo)    
+    res.modifier_dict['trust_extra'] = pm(4, lambda r:2, yolo) 
 
     # Learning
     res.modifier_dict['n_epochs'] = pm(50, lambda r:30, n_epochs)   
@@ -63,18 +60,14 @@ def baseline_runner(fast_mode = False, local_mode = False):
     # Cost function
  
     # Model
-    model_list = ['yolov8s']
+    model_list = ['rtdetr-l']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
-    # Post processing
-    def z_range_func(r):
-        if r.uniform()<0.4:
-            return -1
-        else:
-            return r.integers(3,7)
-    res.modifier_dict['z_range'] = pm(0, z_range_func, z_range) 
     
+
+    # Post processing
+    res.modifier_dict['z_range'] = pm(0, lambda r:4, z_range)  
 
     
 

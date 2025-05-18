@@ -565,13 +565,13 @@ class YOLOModel(fls.BaseClass):
                     strip_optimizer(f)
 
                 if self.use_best_epoch:
-                    model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt'))
+                    model_list.append(model_setup_func(fls.temp_dir + 'yolo_weights/motor_detector/weights/best.pt'))
                 else:
-                    model_list.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/last.pt'))
+                    model_list.append(model_setup_func(fls.temp_dir + 'yolo_weights/motor_detector/weights/last.pt'))
 
                 print(self.epochs_save)
                 for e,listt in zip(self.epochs_save, self.trained_model_per_epoch):
-                    listt.append(ultralytics.YOLO(fls.temp_dir + 'yolo_weights/motor_detector/weights/epoch' +str(e)+ '.pt'))
+                    listt.append(model_setup_func(fls.temp_dir + 'yolo_weights/motor_detector/weights/epoch' +str(e)+ '.pt'))
                 
 
             self.trained_model = model_list
@@ -679,6 +679,10 @@ class YOLOModel(fls.BaseClass):
                                                 tmp = x_center
                                                 x_center = y_center
                                                 y_center = tmp
+                                            if self.preprocessor.apply_transpose_xz:
+                                                tmp = x_center
+                                                x_center = z_center
+                                                z_center = tmp
                                             
                                             all_detections.append({
                                                 'z': round(data.slices_present[sub_batch_slice_nums[j]]),

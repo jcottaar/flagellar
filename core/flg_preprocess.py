@@ -167,6 +167,10 @@ class Preprocessor2(fls.BaseClass):
     pad_to_original_size = False
     voxel_scale = 1.
 
+    # Initial transposes
+    apply_transpose_xz = False
+    apply_transpose_yz = False
+
     # Percentile scaling    
     scale_percentile_value = 3.
 
@@ -215,6 +219,28 @@ class Preprocessor2(fls.BaseClass):
                 fls.claim_gpu('cupy')
                 print('failed cupy')
                 pass
+
+        if self.apply_transpose_xz:
+            img = cp.transpose(img, axes=(2,1,0))
+            if len(data.labels)>0:
+                tmp = data.labels['x']
+                data.labels['x'] = data.labels['z']
+                data.labels['z'] = tmp
+            if len(data.negative_labels)>0:
+                tmp = data.negative_labels['x']
+                data.negative_labels['x'] = data.negative_labels['z']
+                data.negative_labels['z'] = tmp
+
+        if self.apply_transpose_yz:
+            img = cp.transpose(img, axes=(1,0,2))
+            if len(data.labels)>0:
+                tmp = data.labels['y']
+                data.labels['y'] = data.labels['z']
+                data.labels['z'] = tmp
+            if len(data.negative_labels)>0:
+                tmp = data.negative_labels['y']
+                data.negative_labels['y'] = data.negative_labels['z']
+                data.negative_labels['z'] = tmp
 
         # Scale percentile
         for ii in range(img.shape[0]):
