@@ -98,7 +98,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['hsv_v'] = pm(0.4, lambda r:r.uniform(0,0.4), yolo)
     res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
     res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
-    res.modifier_dict['degrees'] = pm(0., lambda r:10.*(r.uniform()>0.5), yolo)   
+    res.modifier_dict['degrees'] = pm(0., lambda r:r.uniform(0,45), yolo)   
 
     # Post processing
     res.modifier_dict['absolute_threshold'] = pm(False, lambda r:r.uniform()>0.5, absolute_threshold)
