@@ -20,9 +20,8 @@ import h5py
 
 def baseline_runner(fast_mode = False, local_mode = False):
     res = ModelRunner()
-    res.label = 'Alt';
+    res.label = 'Baseline';
     res.base_model = flg_model.ThreeStepModelLabelBased()
-    res.base_model.step2Motors = flg_model.FindClustersMultiZ()
 
 
     # print('8 ensemble, 141 epochs')
@@ -43,31 +42,82 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
        
     # Ensemble
-    res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
-    res.modifier_dict['concentration'] = pm(1, lambda r:1, yolo)  
+    if local_mode:
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:r.integers(1,2), yolo)
+    else:
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
+    res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,2), yolo)  
     
     # Data
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
     res.modifier_dict['trust_neg'] = pm(0, lambda r:1, yolo)
-    res.modifier_dict['trust_extra'] = pm(4, lambda r:2, yolo) 
+    res.modifier_dict['trust_extra'] = pm(4, lambda r:1, yolo)
+    res.modifier_dict['negative_label_threshold'] = pm(0.6, lambda r:0.6, yolo)
+
+    # Preprocessing
+    res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:25., prep)
+    res.modifier_dict['blur_xy'] = pm(30, lambda r:30., prep)
+    res.modifier_dict['blur_z'] = pm(0., lambda r:0., prep)
+    res.modifier_dict['scale_moving_std'] = pm(True, lambda r:True, prep)
+    res.modifier_dict['scale_moving_average_size'] = pm(3000, lambda r:3000, prep)
+    res.modifier_dict['scale_moving_std_size_fac'] = pm(1., lambda r:1.3, scale_moving_std_size_fac)
+    res.modifier_dict['blur_xy_moving_std'] = pm(60., lambda r:60., prep)
+    res.modifier_dict['clip_value'] = pm(3., lambda r:3., prep)
+    res.modifier_dict['scale_percentile_value'] = pm(3., lambda r:3., prep)
+    res.modifier_dict['img_size'] = pm(640, lambda r:640-32, yolo)
+    res.modifier_dict['box_size'] = pm(18, lambda r:18, yolo)
 
     # Learning
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:30, n_epochs)   
-    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:True, use_best_epoch)   
-    res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
- 
-    # Cost function
- 
-    # Model
-    model_list = ['rtdetr-l']
-    res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
-    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:True, pretrained_weights)
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,71)).item(), n_epochs)   
+    res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-4,-2.8)), yolo)  
+    res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
+    res.modifier_dict['lrf'] = pm(0.01, lambda r:10**(r.uniform(-2,0)), yolo)  
+    res.modifier_dict['dropout'] = pm(0., lambda r:0., yolo)  
+    res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:0.0003, yolo)  
+    res.modifier_dict['momentum'] = pm(0.937, lambda r:0.937, yolo)
+    res.modifier_dict['warmup_epochs'] = pm(3., lambda r:3., yolo)
 
-    
+    # Cost function
+    res.modifier_dict['box'] = pm(7.5, lambda r:4., yolo)
+
+    # Model
+    model_list = ['yolov8s', 'yolov8m']
+    res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
+    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, pretrained_weights)
+
+    # Augmentation
+    res.modifier_dict['mosaic_mode'] = pm(0, lambda r:1., mosaic_mode) 
+    res.modifier_dict['translate'] = pm(0.1, lambda r:0., yolo) 
+    res.modifier_dict['scale'] = pm(0.5, lambda r:0.5, yolo)
+    res.modifier_dict['mixup'] = pm(0.2, lambda r:0.2, yolo)
+    res.modifier_dict['erasing'] = pm(0.4, lambda r:0.2, yolo)
+    res.modifier_dict['hsv_h'] = pm(0.015, lambda r:0., yolo)
+    res.modifier_dict['hsv_s'] = pm(0.7, lambda r:0., yolo)
+    res.modifier_dict['hsv_v'] = pm(0.4, lambda r:0.2, yolo)
+    res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5, yolo)
+    res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5, yolo)
+    res.modifier_dict['degrees'] = pm(0., lambda r:30., yolo)   
 
     # Post processing
-    res.modifier_dict['z_range'] = pm(0, lambda r:4, z_range)  
+    res.modifier_dict['absolute_threshold'] = pm(False, lambda r:False, absolute_threshold)
+    res.modifier_dict['distance_threshold'] = pm(10., lambda r:10., clusters) 
+    def z_range_func(r):
+        if r.uniform()<0.4:
+            return -1
+        else:
+            return r.integers(3,7)
+    res.modifier_dict['z_range'] = pm(0, lambda r:4, z_range) 
+    res.modifier_dict['adjust_voxel_scale'] = pm(1., lambda r:1., adjust_prep_multiply)
+    res.modifier_dict['adjust_voxel_scale'].modify_after_train = True
+    res.modifier_dict['adjust_clip_value'] = pm(1., lambda r:1., adjust_prep_multiply)
+    res.modifier_dict['adjust_clip_value'].modify_after_train = True
+    res.modifier_dict['adjust_blur_xy'] = pm(1., lambda r:1., adjust_prep_multiply)
+    res.modifier_dict['adjust_blur_xy'].modify_after_train = True
+    res.modifier_dict['adjust_blur_z'] = pm(1., lambda r:1., adjust_prep_add)
+    res.modifier_dict['adjust_blur_z'].modify_after_train = True
+    
 
     
 
@@ -84,9 +134,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
 
 
     
-    res.do_inference = True
-    if local_mode:
-        res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
+    res.do_inference = True    
     if fast_mode:
         res.label = 'Baseline fast mode'
         res.train_part = slice(0,40)
@@ -165,25 +213,29 @@ class ModelRunner(fls.BaseClass):
                         self.modifier_values[key] = value.random_function(rng)
                     else:
                         self.modifier_values[key] = value.missing_value
-                    value.modifier_function(model, key, self.modifier_values[key])
+                    if not value.modify_after_train:
+                        value.modifier_function(model, key, self.modifier_values[key])
                 model.step1Labels.epochs_save = list(np.arange(30,model.step1Labels.n_epochs,30))
                 self.untrained_model = copy.deepcopy(model)
                 print(self.modifier_values)
                 if len(model.train_data_selector.datasets)>0:
                     break            
+            self.untrained_model.step1Labels.epochs_save = list(np.arange(30,self.untrained_model.step1Labels.n_epochs,30))
             #return
     
             # Train model
-            print('XXX', np.sum([len(d.labels)>0 for d in self.test_data])/len(self.test_data))
             if self.train_in_subprocess:
                 model = model.train_subprocess(self.train_data, self.test_data)
             else:
                 model.train(self.train_data, self.test_data)
+            for key, value in self.modifier_dict.items():  
+                if value.modify_after_train:
+                    value.modifier_function(model, key, self.modifier_values[key])
             self.trained_model = copy.deepcopy(model)
 
             # Infer
             if fls.env=='vast':
-                model.run_in_parallel = False
+                model.run_in_parallel = False            
             model.ratio_of_motors_allowed = np.sum([len(d.labels)>0 for d in self.test_data])/len(self.test_data)
             print('ratio: ', model.ratio_of_motors_allowed)
             if self.do_inference:
@@ -214,6 +266,7 @@ class PropertyModifier(fls.BaseClass):
     missing_value = 0 # value to assume for this if it's missing in older output
     random_function = 0 # gets RNG as input, should return a new value
     modifier_function = 0 # gets model, name (in dict), and value as input, should adapt model (does not have to return)    
+    modify_after_train = False
 
 def prep(model, name, value):
     setattr(model.step1Labels.preprocessor, name, value)
@@ -292,4 +345,8 @@ def z_range(model,name,value):
         model.step2Motors = flg_model.FindClustersMultiZ()
         model.step2Motors.z_range = value
         print('range: ', model.step2Motors.z_range)
-        
+
+def adjust_prep_multiply(model,name,value):
+    setattr(model.step1Labels.preprocessor, name[7:], value*getattr(model.step1Labels.preprocessor, name[7:]))
+def adjust_prep_add(model,name,value):
+    setattr(model.step1Labels.preprocessor, name[7:], value+getattr(model.step1Labels.preprocessor, name[7:]))
