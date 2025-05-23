@@ -57,6 +57,7 @@ class YOLOModel(fls.BaseClass):
     remove_suspect_areas = True
     negative_slice_ratio = 0.
     negative_label_threshold = 0.6
+    rgb_offset = 0.
 
     alternative_slice_selection = True
     trust_expanded = 6
@@ -203,12 +204,12 @@ class YOLOModel(fls.BaseClass):
                     if self.prevent_ultralytics_resize:
                         after_x = max(0, self.img_size-normalized_img.shape[1])
                         after_y = max(0, self.img_size-normalized_img.shape[0])
-                        normalized_img = np.pad(normalized_img, ((0,after_y),(0,after_x)), mode='constant', constant_values=127)
+                        normalized_img = np.pad(normalized_img, ((0,after_y),(0,after_x),(0,0)), mode='constant', constant_values=127)
 
                         x_start, x_end, x_scaling = find_coords(normalized_img.shape[1], self.img_size, poi_x)
                         y_start, y_end, y_scaling = find_coords(normalized_img.shape[0], self.img_size, poi_y)
-                        normalized_img = normalized_img[y_start:y_end, x_start:x_end]
-                        assert normalized_img.shape == (self.img_size, self.img_size)
+                        normalized_img = normalized_img[y_start:y_end, x_start:x_end,:]
+                        assert normalized_img.shape == (self.img_size, self.img_size,3)
                     else:
                         x_start = 0; y_start = 0;
                     
@@ -251,7 +252,9 @@ class YOLOModel(fls.BaseClass):
                         else:
                             this_trust = self.trust_extra
                         slices_to_do = []
-                        for i_slice in range(data.data_shape[0]):
+                        rgb_offset_scaled = np.ceil(self.rgb_offset/data.voxel_spacing).astype(int)
+                        print('offset', rgb_offset_scaled)
+                        for i_slice in np.arange(rgb_offset_scaled,data.data_shape[0]-rgb_offset_scaled):
                             in_any_range = False
                             in_forbidden_range = False
                             for i_row in range(len(data.labels)):
@@ -273,10 +276,20 @@ class YOLOModel(fls.BaseClass):
                                 slices_to_do.append(i_slice)
                         if len(slices_to_do)==0:
                             continue
-                        dd = copy.deepcopy(data)
+                        dd = copy.deepcopy(data)                        
+                        slices_to_do_orig = copy.deepcopy(slices_to_do)
+                        for s in slices_to_do_orig:
+                            slices_to_do.append(s-rgb_offset_scaled)
+                            slices_to_do.append(s+rgb_offset_scaled)
+                        slices_to_do = list(np.unique(slices_to_do))
                         self.preprocessor.load_and_preprocess(dd, desired_original_slices = slices_to_do)
-                        for i_z,z in enumerate(dd.slices_present):
-                            normalized_img = dd.data[i_z,:,:]
+                        assert dd.slices_present == slices_to_do
+                        for i_z,z in enumerate(slices_to_do_orig):
+                            try:
+                                normalized_img = np.stack((dd.data[slices_to_do.index(z),:,:],dd.data[slices_to_do.index(z-rgb_offset_scaled),:,:],dd.data[slices_to_do.index(z+rgb_offset_scaled),:,:]))
+                            except:
+                                continue
+                            normalized_img = np.transpose(normalized_img,axes=[1,2,0])
                             dest_filename = f"{data.name}_z{z:04d}.jpg"                                            
     
                             
@@ -309,6 +322,7 @@ class YOLOModel(fls.BaseClass):
                             write_image(dest_filename, normalized_img, x_center, y_center, x_width, y_width, x_poi, y_poi)
                             neg_slice_counter += self.negative_slice_ratio
                         while neg_slice_counter>=1:
+                            raise 'stop'
                             while True:
                                 data_ind = neg_slice_selector.integers(0,len(data_list))
                                 if len(data_list[data_ind].labels)==0:
@@ -635,7 +649,8 @@ class YOLOModel(fls.BaseClass):
 
                 #selected_indices = np.linspace(i_model%self.concentration, data.data.shape[0]-1, int(data.data.shape[0] // self.concentration))
                 #selected_indices = np.round(selected_indices).astype(int)
-                selected_indices = np.arange(i_model%self.concentration, data.data.shape[0], self.concentration)
+                rgb_offset_scaled = np.ceil(self.rgb_offset/data.voxel_spacing).astype(int)
+                selected_indices = np.arange(i_model%self.concentration + rgb_offset_scaled, data.data.shape[0] - rgb_offset_scaled, self.concentration)
                 #slice_files = [slice_files[i] for i in selected_indices]
                 
                 print(f"Processing {len(selected_indices)} out of {data.data.shape[0]} slices (CONCENTRATION={self.concentration})")
@@ -658,8 +673,11 @@ class YOLOModel(fls.BaseClass):
                             with torch.amp.autocast('cuda'), torch.no_grad():
                                 data_in = []
                                 for i_slice in sub_batch_slice_nums:
-                                    data_in.append(data.data[i_slice,:,:,None])
-                                    data_in[-1] = data_in[-1][:,:,[0,0,0]]
+                                    data_in.append(data.data[ [i_slice,i_slice-rgb_offset_scaled,i_slice+rgb_offset_scaled],:,:])
+                                    data_in[-1] = np.transpose(data_in[-1], [1,2,0])
+                                    #data_in.append(data.data[i_slice,:,:,None])
+                                    #data_in[-1] = data_in[-1][:,:,[0,0,0]]
+                                    assert data_in[-1].shape[2] == 3
                                 sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True, imgsz=image_size)
                             for j, result in enumerate(sub_results):
                                 result = result.cpu()
