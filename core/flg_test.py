@@ -113,6 +113,7 @@ def test_yolo(update_reference=False):
     model.step1Labels.trust_neg = 2
     model.step1Labels.trust_extra = 1
     model.step1Labels.negative_slice_ratio = 0.
+    model.step1Labels.pad_with_noise = False
     model.step1Labels.remove_suspect_areas = True
     model.train_data_selector.datasets = ['tom','mba']
     model.train(train_data, fls.load_all_train_data()[216:230])

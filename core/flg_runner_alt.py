@@ -45,7 +45,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     if local_mode:
         res.modifier_dict['n_ensemble'] = pm(1, lambda r:r.integers(1,2), yolo)
     else:
-        res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
     res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,2), yolo)  
     
     # Data
@@ -69,11 +69,11 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['box_size'] = pm(18, lambda r:18, yolo)
 
     # Learning
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,71)).item(), n_epochs)   
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,51)).item(), n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
-    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-4,-2.8)), yolo)  
-    res.modifier_dict['cos_lr'] = pm(False, lambda r:r.uniform()>0.5, cos_lr)  
-    res.modifier_dict['lrf'] = pm(0.01, lambda r:10**(r.uniform(-2,0)), yolo)  
+    res.modifier_dict['lr0'] = pm(0.001, lambda r:10**-3.5, yolo)  
+    res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
+    res.modifier_dict['lrf'] = pm(0.01, lambda r:0.1), yolo)  
     res.modifier_dict['dropout'] = pm(0., lambda r:0., yolo)  
     res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:0.0003, yolo)  
     res.modifier_dict['momentum'] = pm(0.937, lambda r:0.937, yolo)
@@ -83,9 +83,9 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['box'] = pm(7.5, lambda r:4., yolo)
 
     # Model
-    model_list = ['yolov8s', 'yolov8m']
+    model_list = ['yolov8s', 'yolov8m', 'yolov8l']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
-    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:r.uniform()>0.5, pretrained_weights)
+    res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
     # Augmentation
     res.modifier_dict['mosaic_mode'] = pm(0, lambda r:1., mosaic_mode) 
@@ -117,6 +117,10 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['adjust_blur_xy'].modify_after_train = True
     res.modifier_dict['adjust_blur_z'] = pm(1., lambda r:1., adjust_prep_add)
     res.modifier_dict['adjust_blur_z'].modify_after_train = True
+
+    offset_vals = [0.,1.,15.,30.,45.,60.,100.,500.]
+    res.modifier_dict['rgb_offset'] = pm(0., lambda r:offset_vals[r.integers(0,len(offset_vals))], yolo)
+    res.modifier_dict['pad_with_noise'] = pm(False, lambda r:r.uniform()>0.5, yolo)
     
 
     

@@ -44,6 +44,7 @@ class YOLOModel(fls.BaseClass):
     #Input
     n_ensemble = 1
     img_size = 640
+    pad_with_noise = False
     prevent_ultralytics_resize = True
     n_epochs = 50
     epochs_save: object = field(init=True, default_factory=list)
@@ -177,6 +178,7 @@ class YOLOModel(fls.BaseClass):
 
             # Set train and test
             np.random.shuffle(train_data_filtered)
+            pad_rng = np.random.default_rng(seed=self.seed)
 
             
             # Helper function to process a list of tomograms
@@ -204,8 +206,17 @@ class YOLOModel(fls.BaseClass):
                     if self.prevent_ultralytics_resize:
                         after_x = max(0, self.img_size-normalized_img.shape[1])
                         after_y = max(0, self.img_size-normalized_img.shape[0])
-                        normalized_img = np.pad(normalized_img, ((0,after_y),(0,after_x),(0,0)), mode='constant', constant_values=127)
-
+                        mean_val = np.mean(normalized_img)
+                        std_val = np.std(normalized_img)
+                        normalized_img = np.pad(normalized_img.astype(np.float32), ((0,after_y),(0,after_x),(0,0)), mode='constant', constant_values=np.nan)
+                        if self.pad_with_noise:
+                            noise_mat = np.clip(pad_rng.normal(mean_val,std_val,normalized_img.shape),0,255)
+                            normalized_img[np.isnan(normalized_img)] = noise_mat[np.isnan(normalized_img)]
+                        else:
+                            normalized_img[np.isnan(normalized_img)] = 127
+                        normalized_img = normalized_img.astype(np.uint8)
+                        #plt.figure();plt.imshow(normalized_img[:,:,0],cmap='bone');plt.colorbar()
+                        #plt.pause(0.0001)
                         x_start, x_end, x_scaling = find_coords(normalized_img.shape[1], self.img_size, poi_x)
                         y_start, y_end, y_scaling = find_coords(normalized_img.shape[0], self.img_size, poi_y)
                         normalized_img = normalized_img[y_start:y_end, x_start:x_end,:]
@@ -644,7 +655,7 @@ class YOLOModel(fls.BaseClass):
             #tomo_dir = img_dir
             #slice_files = sorted([f for f in os.listdir(tomo_dir) if f.endswith('.jpg')])
 
-            all_detections = []
+            all_detections = []            
             for i_model,this_model in enumerate(self.trained_model):
 
                 #selected_indices = np.linspace(i_model%self.concentration, data.data.shape[0]-1, int(data.data.shape[0] // self.concentration))
@@ -748,7 +759,7 @@ class YOLOModel(fls.BaseClass):
             image_size = ( (np.ceil(data.data.shape[1]/32)*32).astype(int).item(), (np.ceil(data.data.shape[2]/32)*32).astype(int).item() )
             after_x = max(0, image_size[1]-data.data.shape[2])
             after_y = max(0, image_size[0]-data.data.shape[1])
-            data.data = np.pad(data.data, ((0,0),(0,after_y),(0,after_x)), mode='constant', constant_values=127)
+            data.data = np.pad(data.data, ((0,0),(0,after_y),(0,after_x)), mode='constant', constant_values=127)            
             assert data.data.shape == (data.data.shape[0], image_size[0], image_size[1])
             #print('after ', data.data.shape)
         else:
