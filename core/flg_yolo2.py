@@ -109,6 +109,7 @@ class YOLOModel(fls.BaseClass):
     trained_model = 0
     trained_model_per_epoch = 0
     train_results = 0
+    prepped = False
     
     def __post_init__(self):
         super().__post_init__()
@@ -264,7 +265,6 @@ class YOLOModel(fls.BaseClass):
                             this_trust = self.trust_extra
                         slices_to_do = []
                         rgb_offset_scaled = np.ceil(self.rgb_offset/data.voxel_spacing).astype(int)
-                        print('offset', rgb_offset_scaled)
                         for i_slice in np.arange(rgb_offset_scaled,data.data_shape[0]-rgb_offset_scaled):
                             in_any_range = False
                             in_forbidden_range = False
@@ -769,9 +769,12 @@ class YOLOModel(fls.BaseClass):
         cpu, device = fls.prep_pytorch(self.seed, True, False)
         BATCH_SIZE = 32
 
-        for this_model in self.trained_model:
-            this_model.to(device)
-            this_model.fuse()
+        if not self.prepped:
+            print('Prepping')
+            self.prepped=True
+            for this_model in self.trained_model:
+                this_model.to(device)
+                this_model.fuse()
 
         results = []
         motors_found = 0

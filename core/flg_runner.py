@@ -45,77 +45,78 @@ def baseline_runner(fast_mode = False, local_mode = False):
     if local_mode:
         res.modifier_dict['n_ensemble'] = pm(1, lambda r:r.integers(1,2), yolo)
     else:
-        res.modifier_dict['n_ensemble'] = pm(1, lambda r:2, yolo)
+        res.modifier_dict['n_ensemble'] = pm(1, lambda r:1, yolo)
     res.modifier_dict['concentration'] = pm(1, lambda r:r.integers(1,2), yolo)  
     
     # Data
     res.base_model.train_data_selector.datasets = ['tom']
     res.modifier_dict['extra_data'] = pm(False, lambda r:True, add_all_datasets)
-    res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(0,3), yolo)
-    res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(0,5), yolo)
+    res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(1,3), yolo)
+    res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(1,3), yolo)
     res.modifier_dict['negative_label_threshold'] = pm(0.6, lambda r:r.uniform(0.6,0.65), yolo)
 
     # Preprocessing
-    res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:r.uniform(20.,25.), prep)
-    res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(15.,45.), prep)
-    res.modifier_dict['blur_z'] = pm(0., lambda r:15.*(r.uniform()>0.5), prep)
+    res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:r.uniform(18.,20.), prep)
+    res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(30.,45.), prep)
+    res.modifier_dict['blur_z'] = pm(0., lambda r:0., prep)
     res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
-    res.modifier_dict['scale_moving_average_size'] = pm(3000, lambda r:r.integers(2000,4000), prep)
-    res.modifier_dict['scale_moving_std_size_fac'] = pm(1., lambda r:r.uniform(1,1.5), scale_moving_std_size_fac)
-    res.modifier_dict['blur_xy_moving_std'] = pm(60., lambda r:r.uniform(0.,60.), prep)
+    res.modifier_dict['scale_moving_average_size'] = pm(3000, lambda r:r.integers(1500,3000), prep)
+    res.modifier_dict['scale_moving_std_size_fac'] = pm(1., lambda r:r.uniform(1.5,2.5), scale_moving_std_size_fac)
+    res.modifier_dict['blur_xy_moving_std'] = pm(60., lambda r:0., prep)
     res.modifier_dict['clip_value'] = pm(3., lambda r:r.uniform(2.5,3.5), prep)
     res.modifier_dict['scale_percentile_value'] = pm(3., lambda r:r.uniform(2.,4.), prep)
-    res.modifier_dict['img_size'] = pm(640, lambda r:32*r.integers(15,21), yolo)
+    res.modifier_dict['img_size'] = pm(640, lambda r:32*r.integers(18,21), yolo)
     res.modifier_dict['box_size'] = pm(18, lambda r:r.integers(14,30), yolo)
 
     # Learning
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,51)).item(), n_epochs)   
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,41)).item(), n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.2,-2.8)), yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
     res.modifier_dict['lrf'] = pm(0.01, lambda r:10**(r.uniform(-2,-1)), yolo)  
-    res.modifier_dict['dropout'] = pm(0., lambda r:(r.uniform(0.,0.1)) * (r.uniform()>0.5), yolo)  
+    res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
     res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0, 0.0006), yolo)  
-    res.modifier_dict['momentum'] = pm(0.937, lambda r:r.uniform(0.917,0.957), yolo)
+    res.modifier_dict['momentum'] = pm(0.937, lambda r:r.uniform(0.907,0.937), yolo)
     res.modifier_dict['warmup_epochs'] = pm(3., lambda r:r.integers(2,6).item(), yolo)
 
     # Cost function
-    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(4.,7.5), yolo)
+    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,5.), yolo)
 
     # Model
-    model_list = ['yolov8s', 'yolov8m', 'yolov10s', 'yolov10m', 'yolo11s', 'yolo11m']
+    model_list = ['yolov8m']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
     # Augmentation
-    res.modifier_dict['mosaic_mode'] = pm(0, lambda r:r.uniform(), mosaic_mode) 
-    res.modifier_dict['translate'] = pm(0.1, lambda r:0.1*(r.uniform()>0.5), yolo) 
-    res.modifier_dict['scale'] = pm(0.5, lambda r:r.uniform(0.25,0.6), yolo)
-    res.modifier_dict['mixup'] = pm(0.2, lambda r:r.uniform(0,0.2), yolo)
+    res.modifier_dict['mosaic_mode'] = pm(0, lambda r:1., mosaic_mode) 
+    res.modifier_dict['translate'] = pm(0.1, lambda r:0., yolo) 
+    res.modifier_dict['scale'] = pm(0.5, lambda r:r.uniform(0.3,0.6), yolo)
+    res.modifier_dict['mixup'] = pm(0.2, lambda r:r.uniform(0.2,1.), yolo)
     res.modifier_dict['erasing'] = pm(0.4, lambda r:r.uniform(0,0.4), yolo)
-    res.modifier_dict['hsv_h'] = pm(0.015, lambda r:r.uniform(0,0.015), yolo)
-    res.modifier_dict['hsv_s'] = pm(0.7, lambda r:r.uniform(0,0.7), yolo)
-    res.modifier_dict['hsv_v'] = pm(0.4, lambda r:r.uniform(0,0.4), yolo)
-    res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
-    res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5*(r.uniform()>0.5), yolo)
-    res.modifier_dict['degrees'] = pm(0., lambda r:r.uniform(0,45), yolo)   
+    res.modifier_dict['hsv_h'] = pm(0.015, lambda r:0., yolo)
+    res.modifier_dict['hsv_s'] = pm(0.7, lambda r:0., yolo)
+    res.modifier_dict['hsv_v'] = pm(0.4, lambda r:0., yolo)
+    res.modifier_dict['fliplr'] = pm(0.5, lambda r:0.5, yolo)
+    res.modifier_dict['flipud'] = pm(0.5, lambda r:0.5, yolo)
+    res.modifier_dict['degrees'] = pm(0., lambda r:10., yolo)   
 
     # Post processing
-    res.modifier_dict['absolute_threshold'] = pm(False, lambda r:r.uniform()>0.5, absolute_threshold)
-    res.modifier_dict['distance_threshold'] = pm(10., lambda r:r.uniform(10.,20.), clusters) 
+    res.modifier_dict['absolute_threshold'] = pm(False, lambda r:False, absolute_threshold)
+    res.modifier_dict['relative_confidence_threshold'] = pm(0.2, lambda r:r.uniform(0.1,0.2), yolo)
+    res.modifier_dict['distance_threshold'] = pm(10., lambda r:10., clusters) 
     def z_range_func(r):
-        if r.uniform()<0.4:
+        if r.uniform()<0.0:
             return -1
         else:
             return r.integers(3,7)
     res.modifier_dict['z_range'] = pm(0, z_range_func, z_range) 
     res.modifier_dict['adjust_voxel_scale'] = pm(1., lambda r:r.uniform(0.8,1.2), adjust_prep_multiply)
     res.modifier_dict['adjust_voxel_scale'].modify_after_train = True
-    res.modifier_dict['adjust_clip_value'] = pm(1., lambda r:r.uniform(0.7,1.3), adjust_prep_multiply)
+    res.modifier_dict['adjust_clip_value'] = pm(1., lambda r:r.uniform(0.9,1.3), adjust_prep_multiply)
     res.modifier_dict['adjust_clip_value'].modify_after_train = True
-    res.modifier_dict['adjust_blur_xy'] = pm(1., lambda r:r.uniform(0.7,1.3), adjust_prep_multiply)
+    res.modifier_dict['adjust_blur_xy'] = pm(1., lambda r:r.uniform(1.,1.4), adjust_prep_multiply)
     res.modifier_dict['adjust_blur_xy'].modify_after_train = True
-    res.modifier_dict['adjust_blur_z'] = pm(1., lambda r:(r.uniform()>0.5)*r.uniform(0,15), adjust_prep_add)
+    res.modifier_dict['adjust_blur_z'] = pm(1., lambda r:0., adjust_prep_add)
     res.modifier_dict['adjust_blur_z'].modify_after_train = True
     
 

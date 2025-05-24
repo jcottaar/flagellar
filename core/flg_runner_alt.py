@@ -73,7 +73,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**-3.5, yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
-    res.modifier_dict['lrf'] = pm(0.01, lambda r:0.1), yolo)  
+    res.modifier_dict['lrf'] = pm(0.01, lambda r:0.1, yolo)  
     res.modifier_dict['dropout'] = pm(0., lambda r:0., yolo)  
     res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:0.0003, yolo)  
     res.modifier_dict['momentum'] = pm(0.937, lambda r:0.937, yolo)
