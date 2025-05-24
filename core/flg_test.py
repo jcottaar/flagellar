@@ -81,7 +81,6 @@ def test_unet_alt(update_reference=False):
 def test_yolo_infer(update_reference=False):
     train_data = fls.load_all_train_data()
     model = fls.dill_load(fls.temp_dir + 'yolo_test.pickle')
-    model.step1Labels = flg_model.TestTimeAugmentationStep1(model_internal = model.step1Labels)
     model.step3Output.threshold = 0.
     rr = model.infer(train_data[19:21])
     res = [r.labels for r in rr]
@@ -113,8 +112,9 @@ def test_yolo(update_reference=False):
     model.step1Labels.trust_neg = 2
     model.step1Labels.trust_extra = 1
     model.step1Labels.negative_slice_ratio = 0.
-    model.step1Labels.pad_with_noise = False
+    model.step1Labels.pad_with_noise = True
     model.step1Labels.remove_suspect_areas = True
+    model.step1Labels.remove_suspect_positive_labels = True
     model.train_data_selector.datasets = ['tom','mba']
     model.train(train_data, fls.load_all_train_data()[216:230])
     fls.dill_save(fls.temp_dir + 'yolo_test.pickle', model)
