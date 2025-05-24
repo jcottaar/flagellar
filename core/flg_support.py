@@ -385,16 +385,17 @@ def load_one_measurement(name, is_train, include_train_labels):
             result.labels = result.labels[0:0]
 
         # Add suspect labels
-        merged = result.labels.merge(
-            bad_positive_labels[bad_positive_labels['name']==result.name],
-            on=['z','y','x'],
-            how='left'
-        )
-        missing = merged['suspect'].isna()
-        if missing.any():
-            idxs = merged.index[missing].tolist()
-            raise Exception(f"Labels at index {idxs} not found in bad_positive_labels")
-        result.labels['suspect'] = merged['suspect']
+        if len(result.labels)>0:
+            merged = result.labels.merge(
+                bad_positive_labels[bad_positive_labels['name']==result.name],
+                on=['z','y','x'],
+                how='left'
+            )
+            missing = merged['suspect'].isna()
+            if missing.any():
+                idxs = merged.index[missing].tolist()
+                raise Exception(f"Labels at index {idxs} not found in bad_positive_labels")
+            result.labels['suspect'] = merged['suspect']
        
         result.voxel_spacing = this_labels[0:1][['Voxel spacing']].to_numpy()[0,0]
         result.data_shape = (this_labels[0:1][['Array shape (axis 0)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 1)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 2)']].to_numpy()[0,0])
