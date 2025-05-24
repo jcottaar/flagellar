@@ -667,7 +667,7 @@ class YOLOModel(fls.BaseClass):
                 #selected_indices = np.linspace(i_model%self.concentration, data.data.shape[0]-1, int(data.data.shape[0] // self.concentration))
                 #selected_indices = np.round(selected_indices).astype(int)
                 rgb_offset_scaled = np.ceil(self.rgb_offset/data.voxel_spacing).astype(int)
-                selected_indices = np.arange(i_model%self.concentration + rgb_offset_scaled, data.data.shape[0] - rgb_offset_scaled, self.concentration)
+                selected_indices = np.arange(i_model%self.concentration, data.data_shape[0], self.concentration)
                 #slice_files = [slice_files[i] for i in selected_indices]
                 
                 print(f"Processing {len(selected_indices)} out of {data.data.shape[0]} slices (CONCENTRATION={self.concentration})")
@@ -689,13 +689,20 @@ class YOLOModel(fls.BaseClass):
                             #print(sub_batch_slice_nums)
                             with torch.amp.autocast('cuda'), torch.no_grad():
                                 data_in = []
+                                slices_here = []
                                 for i_slice in sub_batch_slice_nums:
-                                    data_in.append(data.data[ [i_slice,i_slice-rgb_offset_scaled,i_slice+rgb_offset_scaled],:,:])
-                                    data_in[-1] = np.transpose(data_in[-1], [1,2,0])
-                                    #data_in.append(data.data[i_slice,:,:,None])
-                                    #data_in[-1] = data_in[-1][:,:,[0,0,0]]
-                                    assert data_in[-1].shape[2] == 3
-                                sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True, imgsz=image_size)
+                                    if (i_slice in data.slices_present) and (i_slice-rgb_offset_scaled in data.slices_present) and (i_slice+rgb_offset_scaled in data.slices_present):
+                                        data_in.append(data.data[ [data.slices_present.index(i_slice),
+                                                                   data.slices_present.index(i_slice-rgb_offset_scaled),data.slices_present.index(i_slice+rgb_offset_scaled)],:,:])
+                                        data_in[-1] = np.transpose(data_in[-1], [1,2,0])
+                                        #data_in.append(data.data[i_slice,:,:,None])
+                                        #data_in[-1] = data_in[-1][:,:,[0,0,0]]
+                                        assert data_in[-1].shape[2] == 3
+                                        slices_here.append(i_slice)
+                                if len(data_in)>0:
+                                    sub_results = this_model(data_in, verbose=False, conf=self.confidence_threshold, half=True, imgsz=image_size)
+                                else:
+                                    sub_results = []                        
                             for j, result in enumerate(sub_results):
                                 result = result.cpu()
                                 all_conf = result.boxes.conf.numpy()#np.array([b.conf for b in result.boxes])
@@ -722,7 +729,7 @@ class YOLOModel(fls.BaseClass):
                                                 z_center = tmp
                                             
                                             all_detections.append({
-                                                'z': round(data.slices_present[sub_batch_slice_nums[j]]),
+                                                'z': round(slices_here[j]),
                                                 'y': round(y_center),
                                                 'x': round(x_center),
                                                 'confidence': float(all_conf[box_idx]),
