@@ -44,6 +44,7 @@ class YOLOModel(fls.BaseClass):
     #Input
     n_ensemble = 1
     img_size = 640
+    min_img_size_factor = 0.
     pad_with_noise = False
     prevent_ultralytics_resize = True
     n_epochs = 50
@@ -206,6 +207,8 @@ class YOLOModel(fls.BaseClass):
 
                     # Pad if necessary
                     if self.prevent_ultralytics_resize:
+                        if normalized_img.shape[1]/self.img_size < self.min_img_size_factor or normalized_img.shape[0]/self.img_size < self.min_img_size_factor:
+                            return
                         after_x = max(0, self.img_size-normalized_img.shape[1])
                         after_y = max(0, self.img_size-normalized_img.shape[0])
                         mean_val = np.mean(normalized_img)

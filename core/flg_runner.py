@@ -54,6 +54,8 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['trust_neg'] = pm(0, lambda r:r.integers(1,3), yolo)
     res.modifier_dict['trust_extra'] = pm(4, lambda r:r.integers(1,3), yolo)
     res.modifier_dict['negative_label_threshold'] = pm(0.6, lambda r:r.uniform(0.6,0.65), yolo)
+    res.modifier_dict['remove_suspect_positive_labels'] = pm(False, lambda r:r.uniform()>0.5, yolo)
+    res.modifier_dict['include_multi_motor'] = pm(True, lambda r:r.uniform()>0.5, data_sel)
 
     # Preprocessing
     res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:r.uniform(18.,20.), prep)
@@ -66,7 +68,11 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['clip_value'] = pm(3., lambda r:r.uniform(2.5,3.5), prep)
     res.modifier_dict['scale_percentile_value'] = pm(3., lambda r:r.uniform(2.,4.), prep)
     res.modifier_dict['img_size'] = pm(640, lambda r:32*r.integers(18,21), yolo)
+    res.modifier_dict['min_img_size_factor'] = pm(0., lambda r:r.uniform(0.,0.5), yolo)
     res.modifier_dict['box_size'] = pm(18, lambda r:r.integers(14,30), yolo)
+    offset_vals = [0.,1.,15.,30.,45.,60.,100.]
+    res.modifier_dict['rgb_offset'] = pm(0., lambda r:offset_vals[r.integers(0,len(offset_vals))], yolo)
+    res.modifier_dict['pad_with_noise'] = pm(False, lambda r:r.uniform()>0.5, yolo)
 
     # Learning
     res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,41)).item(), n_epochs)   
@@ -83,7 +89,7 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,5.), yolo)
 
     # Model
-    model_list = ['yolov8m']
+    model_list = ['yolov8m', 'yolov8l']
     res.modifier_dict['model_name'] = pm('yolov9s', lambda r:model_list[r.integers(0,len(model_list))], yolo)
     res.modifier_dict['use_pretrained_weights'] = pm(True, lambda r:False, pretrained_weights)
 
@@ -118,6 +124,10 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['adjust_blur_xy'].modify_after_train = True
     res.modifier_dict['adjust_blur_z'] = pm(1., lambda r:0., adjust_prep_add)
     res.modifier_dict['adjust_blur_z'].modify_after_train = True
+
+
+
+    
     
 
     
