@@ -56,6 +56,7 @@ class YOLOModel(fls.BaseClass):
     trust_extra = 4
     trust_neg = 0
     remove_suspect_areas = True
+    remove_suspect_positive_labels = False
     negative_slice_ratio = 0.
     negative_label_threshold = 0.6
     rgb_offset = 0.
@@ -273,6 +274,8 @@ class YOLOModel(fls.BaseClass):
                                 if np.abs(dist)<=this_trust:
                                     in_any_range = True
                                 if np.abs(dist)>=self.trust_expanded and np.abs(dist)<=self.forbidden_range:
+                                    in_forbidden_range = True
+                                if self.remove_suspect_positive_labels and data.labels['suspect'][i_row]==1. and np.abs(dist)<=self.forbidden_range:
                                     in_forbidden_range = True
                             for i_row in range(len(data.negative_labels)):
                                 if data.negative_labels['confidence'][i_row]>self.negative_label_threshold:

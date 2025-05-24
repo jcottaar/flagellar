@@ -254,6 +254,7 @@ Data definition and loading
 loading_executor = None
 all_train_labels = pd.read_csv(data_dir + 'train_labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
 negative_labels = dill_load(code_dir + 'neg_labels.pickle')
+bad_positive_labels = dill_load(code_dir + 'bad_pos_labels.pickle')
 #if env=='local':
 #    extra_train_labels = pd.read_csv(data_dir + '/extra2/labels.csv').rename(columns={"Motor axis 0": "z", "Motor axis 1": "y", "Motor axis 2": "x"})
 @dataclass
@@ -376,12 +377,25 @@ def load_one_measurement(name, is_train, include_train_labels):
     if include_train_labels:
         assert is_train
         this_labels = copy.deepcopy(all_train_labels[all_train_labels['tomo_id']==name]).reset_index()
-        result.labels = this_labels[['z', 'y', 'x']]
+        result.labels = copy.deepcopy(this_labels[['z', 'y', 'x']])
         if result.labels['z'][0]==-1:
             assert result.labels['y'][0]==-1
             assert result.labels['x'][0]==-1
             assert len(result.labels)==1
             result.labels = result.labels[0:0]
+
+        # Add suspect labels
+        merged = result.labels.merge(
+            bad_positive_labels[bad_positive_labels['name']==result.name],
+            on=['z','y','x'],
+            how='left'
+        )
+        missing = merged['suspect'].isna()
+        if missing.any():
+            idxs = merged.index[missing].tolist()
+            raise Exception(f"Labels at index {idxs} not found in bad_positive_labels")
+        result.labels['suspect'] = merged['suspect']
+       
         result.voxel_spacing = this_labels[0:1][['Voxel spacing']].to_numpy()[0,0]
         result.data_shape = (this_labels[0:1][['Array shape (axis 0)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 1)']].to_numpy()[0,0], this_labels[0:1][['Array shape (axis 2)']].to_numpy()[0,0])
         result.negative_labels = negative_labels[negative_labels['name']==name].reset_index()
@@ -397,6 +411,18 @@ def load_one_measurement_extra(name, include_train_labels):
         result.voxel_spacing = data_pickle['voxel_spacing']
         result.labels = data_pickle['labels']
         result.data_shape = data_pickle['orig_size']
+
+        # Add suspect labels
+        merged = result.labels.merge(
+            bad_positive_labels[bad_positive_labels['name']==result.name],
+            on=['z','y','x'],
+            how='left'
+        )
+        missing = merged['suspect'].isna()
+        if missing.any():
+            idxs = merged.index[missing].tolist()
+            raise Exception(f"Labels at index {idxs} not found in bad_positive_labels")
+        result.labels['suspect'] = merged['suspect']
     result.check_constraints()    
     return result
 
