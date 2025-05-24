@@ -80,9 +80,11 @@ def test_unet_alt(update_reference=False):
     
 def test_yolo_infer(update_reference=False):
     train_data = fls.load_all_train_data()
+    extra_data = fls.load_all_extra_data()
     model = fls.dill_load(fls.temp_dir + 'yolo_test.pickle')
     model.step3Output.threshold = 0.
-    rr = model.infer(train_data[19:21])
+    model.ratio_of_motors_allowed = 0.8
+    rr = model.infer(train_data[19:21]+extra_data[0:2])
     res = [r.labels for r in rr]
 
     print(rr[0].labels_unfiltered2)
