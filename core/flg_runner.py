@@ -58,35 +58,35 @@ def baseline_runner(fast_mode = False, local_mode = False):
     res.modifier_dict['include_multi_motor'] = pm(True, lambda r:r.uniform()>0.5, data_sel)
 
     # Preprocessing
-    res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:r.uniform(18.,20.), prep)
+    res.modifier_dict['target_voxel_spacing'] = pm(20., lambda r:r.uniform(20.,22.), prep)
     res.modifier_dict['blur_xy'] = pm(30, lambda r:r.uniform(30.,45.), prep)
     res.modifier_dict['blur_z'] = pm(0., lambda r:0., prep)
     res.modifier_dict['scale_moving_std'] = pm(True, lambda r:r.uniform()>0.5, prep)
-    res.modifier_dict['scale_moving_average_size'] = pm(3000, lambda r:r.integers(1500,3000), prep)
-    res.modifier_dict['scale_moving_std_size_fac'] = pm(1., lambda r:r.uniform(1.5,2.5), scale_moving_std_size_fac)
+    res.modifier_dict['scale_moving_average_size'] = pm(3000, lambda r:r.integers(2000,3500), prep)
+    res.modifier_dict['scale_moving_std_size_fac'] = pm(1., lambda r:r.uniform(2.,2.5), scale_moving_std_size_fac)
     res.modifier_dict['blur_xy_moving_std'] = pm(60., lambda r:0., prep)
-    res.modifier_dict['clip_value'] = pm(3., lambda r:r.uniform(2.5,3.5), prep)
-    res.modifier_dict['scale_percentile_value'] = pm(3., lambda r:r.uniform(2.,4.), prep)
+    res.modifier_dict['clip_value'] = pm(3., lambda r:r.uniform(3.,3.7), prep)
+    res.modifier_dict['scale_percentile_value'] = pm(3., lambda r:r.uniform(2.5,4.5), prep)
     res.modifier_dict['img_size'] = pm(640, lambda r:32*r.integers(18,21), yolo)
-    res.modifier_dict['min_img_size_factor'] = pm(0., lambda r:r.uniform(0.,0.5), yolo)
+    res.modifier_dict['min_img_size_factor'] = pm(0., lambda r:0., yolo)
     res.modifier_dict['box_size'] = pm(18, lambda r:r.integers(14,30), yolo)
-    offset_vals = [0.,1.,15.,30.,45.,60.,100.]
+    offset_vals = [0.,1.]
     res.modifier_dict['rgb_offset'] = pm(0., lambda r:offset_vals[r.integers(0,len(offset_vals))], yolo)
-    res.modifier_dict['pad_with_noise'] = pm(False, lambda r:r.uniform()>0.5, yolo)
+    res.modifier_dict['pad_with_noise'] = pm(False, lambda r:True, yolo)
 
     # Learning
-    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(20,41)).item(), n_epochs)   
+    res.modifier_dict['n_epochs'] = pm(50, lambda r:(r.integers(25,41)).item(), n_epochs)   
     res.modifier_dict['use_best_epoch'] = pm(True, lambda r:False, use_best_epoch)   
     res.modifier_dict['lr0'] = pm(0.001, lambda r:10**(r.uniform(-3.2,-2.8)), yolo)  
     res.modifier_dict['cos_lr'] = pm(False, lambda r:True, cos_lr)  
-    res.modifier_dict['lrf'] = pm(0.01, lambda r:10**(r.uniform(-2,-1)), yolo)  
+    res.modifier_dict['lrf'] = pm(0.01, lambda r:10**(r.uniform(-2,-2)), yolo)  
     res.modifier_dict['dropout'] = pm(0., lambda r:r.uniform(0.,0.1), yolo)  
     res.modifier_dict['weight_decay'] = pm(0.0005, lambda r:r.uniform(0, 0.0006), yolo)  
-    res.modifier_dict['momentum'] = pm(0.937, lambda r:r.uniform(0.907,0.937), yolo)
+    res.modifier_dict['momentum'] = pm(0.937, lambda r:r.uniform(0.922,0.942), yolo)
     res.modifier_dict['warmup_epochs'] = pm(3., lambda r:r.integers(2,6).item(), yolo)
 
     # Cost function
-    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,5.), yolo)
+    res.modifier_dict['box'] = pm(7.5, lambda r:r.uniform(1.,4.), yolo)
 
     # Model
     model_list = ['yolov8m', 'yolov8l']
@@ -116,11 +116,11 @@ def baseline_runner(fast_mode = False, local_mode = False):
         else:
             return r.integers(3,7)
     res.modifier_dict['z_range'] = pm(0, z_range_func, z_range) 
-    res.modifier_dict['adjust_voxel_scale'] = pm(1., lambda r:r.uniform(0.8,1.2), adjust_prep_multiply)
+    res.modifier_dict['adjust_voxel_scale'] = pm(1., lambda r:1., adjust_prep_multiply)
     res.modifier_dict['adjust_voxel_scale'].modify_after_train = True
-    res.modifier_dict['adjust_clip_value'] = pm(1., lambda r:r.uniform(0.9,1.3), adjust_prep_multiply)
+    res.modifier_dict['adjust_clip_value'] = pm(1., lambda r:1.1, adjust_prep_multiply)
     res.modifier_dict['adjust_clip_value'].modify_after_train = True
-    res.modifier_dict['adjust_blur_xy'] = pm(1., lambda r:r.uniform(1.,1.4), adjust_prep_multiply)
+    res.modifier_dict['adjust_blur_xy'] = pm(1., lambda r:1.2, adjust_prep_multiply)
     res.modifier_dict['adjust_blur_xy'].modify_after_train = True
     res.modifier_dict['adjust_blur_z'] = pm(1., lambda r:0., adjust_prep_add)
     res.modifier_dict['adjust_blur_z'].modify_after_train = True
