@@ -167,6 +167,8 @@ class Preprocessor2(fls.BaseClass):
     pad_to_original_size = False
     voxel_scale = 1.
 
+    resize = True
+
     # Initial transposes
     apply_transpose_xz = False
     apply_transpose_yz = False
@@ -254,12 +256,14 @@ class Preprocessor2(fls.BaseClass):
         # plt.figure()
         # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
         # plt.colorbar()
-        data.resize_factor = data.voxel_spacing/self.target_voxel_spacing
-        target_shape = tuple(np.round(np.array( (img.shape[1], img.shape[2]) )*data.resize_factor/2 ).astype(int)*2)
-        old_img_list = [img[ii,:,:] for ii in range(img.shape[0])]
-        del img        
-        #gc.collect()
-        img = cp.zeros( (len(old_img_list), target_shape[0], target_shape[1]), dtype=cp.float32 )
+        if self.resize:
+            data.resize_factor = data.voxel_spacing/self.target_voxel_spacing
+            target_shape = tuple(np.round(np.array( (img.shape[1], img.shape[2]) )*data.resize_factor/2 ).astype(int)*2)
+            old_img_list = [img[ii,:,:] for ii in range(img.shape[0])]
+            del img        
+            #gc.collect()
+            img = cp.zeros( (len(old_img_list), target_shape[0], target_shape[1]), dtype=cp.float32 )
+        
         for ii in range(img.shape[0]):
             n_y = old_img_list[ii].shape[0]
             if n_y%2 == 1:
