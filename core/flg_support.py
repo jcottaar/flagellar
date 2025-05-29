@@ -287,9 +287,18 @@ class Data(BaseClass):
         self.loaded_state = 'unloaded'
         self.check_constraints()    
 
+    def data_dir(self):
+        pass
+
 class DataKaggle(Data):
 
     #@profile_each_line
+    def data_dir(self):
+        if self.is_train:
+            return data_dir + 'train/' + self.name + '/'  
+        else:
+            return data_dir + 'test/' + self.name + '/'  
+        
     def load_to_memory(self, desired_slices = None, pad_to_original_size = False, allow_missing=False):  
     
         if self.loaded_state == 'memory': return
@@ -297,10 +306,7 @@ class DataKaggle(Data):
         global loading_executor
         if loading_executor is None:
             loading_executor = concurrent.futures.ThreadPoolExecutor(max_workers=loader_threads)
-        if self.is_train:
-            files = glob.glob(data_dir + 'train/' + self.name + '/*.jpg')            
-        else:
-            files = glob.glob(data_dir + 'test/' + self.name + '/*.jpg')
+        files = glob.glob(self.data_dir() + '/*.jpg')            
         files.sort()
         shape0 = len(files)
         if not desired_slices is None:
@@ -325,6 +331,8 @@ class DataKaggle(Data):
 class DataExtra(Data):
 
     #@profile_each_line
+    def data_dir(self):
+        return data_dir + 'extra/' + self.name + '/'
     def load_to_memory(self, desired_slices = None, pad_to_original_size = False, allow_missing=False):  
     
         if self.loaded_state == 'memory': return
@@ -332,7 +340,7 @@ class DataExtra(Data):
         global loading_executor
         if loading_executor is None:
             loading_executor = concurrent.futures.ThreadPoolExecutor(max_workers=loader_threads)
-        files = glob.glob(data_dir + 'extra/' + self.name + '/*.jpg')            
+        files = glob.glob(self.data_dir() + '*.jpg')         
         files.sort()        
         def load_image(f):
             return cv2.imread(f, cv2.IMREAD_GRAYSCALE)            
@@ -517,6 +525,8 @@ class Model(BaseClass):
     preprocessor: object = field(init=True, default = None)
     ratio_of_motors_allowed: float = field(init=True, default=0.45)
 
+    estimate_voxel_spacing: bool = field(init=False, default=False) 
+
     def __post_init__(self):
         super().__post_init__()
         import flg_preprocess
@@ -563,6 +573,11 @@ class Model(BaseClass):
         for t in test_data:
             t.labels  = pd.DataFrame()
             t.unload()
+
+        if self.estimate_voxel_spacing:
+            import flg_voxel
+            flg_voxel.estimate_voxel_spacing(test_data)
+            
         test_data = self._infer(test_data)
 
         all_vals = []
