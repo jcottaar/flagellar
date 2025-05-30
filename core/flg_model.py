@@ -595,20 +595,20 @@ class FinalModel(fls.Model):
         import glob
         data_len = len(glob.glob(data.data_dir()+'/*'))
         print(data_len)
-        z_vals = z_vals[np.logical_and(z_vals>=0, z_vals<=data_len)]
+        z_vals = z_vals[np.logical_and(z_vals>=0, z_vals<data_len)]
         print(z_vals)
         if len(z_vals)>0:            
-            fls.claim_gpu('')
-            fls.do_gpu_clearing=False
+            #fls.claim_gpu('')
+            fls.do_gpu_clearing=True
             for i_model,model in enumerate(self.step1_list[self.models_first_go:]):
                 flg_yolo2.slices_to_do_global=list(z_vals)
                 res.append(model.infer(copy.deepcopy(data)))
                 res[-1]['i_model']=i_model+self.models_first_go
             labels = pd.concat(res, ignore_index=True)
             fls.do_gpu_clearing=True
-            fls.claim_gpu('cupy')
-            fls.claim_gpu('pytorch')
-            fls.claim_gpu('')
+            #fls.claim_gpu('cupy')
+            #fls.claim_gpu('pytorch')
+            #fls.claim_gpu('')
     
         # Extract per-slice per-model values
         results = dict()
@@ -685,7 +685,7 @@ class FinalModel(fls.Model):
             ind_max = np.argmax(df['value'])
             df = df[ind_max:ind_max+1]
 
-        data.labels = df
+        data.labels = df.reset_index(drop=True)
 
         return data
             

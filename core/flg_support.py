@@ -585,10 +585,12 @@ class Model(BaseClass):
 
         all_vals = []
         for d in test_data:
+            print(d.labels)
             if len(d.labels)==0:
                 all_vals.append(-np.inf)
             else:
                 all_vals.append(d.labels['value'][0])
+            print('this one done')
         inds = np.argsort(all_vals)
         if self.ratio_of_motors_allowed<1:
             for ind in inds[:np.round(len(inds)*(1-self.ratio_of_motors_allowed)).astype(int)]:
