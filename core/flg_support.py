@@ -53,7 +53,7 @@ elif os.path.isdir('/kaggle/working/'):
 else:
     env = 'vast';
     
-debugging_mode = 2
+debugging_mode = 0
 verbosity = 1
 
 match env:
@@ -199,25 +199,28 @@ def prep_pytorch(seed, deterministic, deterministic_needs_cpu):
     return cpu, device
 
 gpu_claimant = ''
+#@profile_each_line
+do_gpu_clearing = True
 def claim_gpu(new_claimant):
-    global gpu_claimant
-    old_claimant = gpu_claimant
-    gpu_claimant = new_claimant
-    if new_claimant == old_claimant or old_claimant == '':
-        return
-    gc.collect()
-    if old_claimant == 'cupy':
-        print('Clearing cupy')
-        import cupy # can't do earlier or it will select wrong device
-        cache = cupy.fft.config.get_plan_cache()
-        cache.clear()
-        cupy.get_default_memory_pool().free_all_blocks()
-    elif old_claimant == 'pytorch':
-        print('Clearing pytorch')
-        import torch
-        torch.cuda.empty_cache()
-    else:
-        raise Exception('Unrecognized GPU claimant')
+    if do_gpu_clearing:
+        global gpu_claimant
+        old_claimant = gpu_claimant
+        gpu_claimant = new_claimant
+        if new_claimant == old_claimant or old_claimant == '':
+            return
+        gc.collect()
+        if old_claimant == 'cupy':
+            print('Clearing cupy')
+            import cupy # can't do earlier or it will select wrong device
+            cache = cupy.fft.config.get_plan_cache()
+            cache.clear()
+            cupy.get_default_memory_pool().free_all_blocks()
+        elif old_claimant == 'pytorch':
+            print('Clearing pytorch')
+            import torch
+            torch.cuda.empty_cache()
+        else:
+            raise Exception('Unrecognized GPU claimant')
 
 @decorator
 def profile_each_line(func, *args, **kwargs):

@@ -565,4 +565,119 @@ class TestTimeAugmentation(fls.Model):
             data_out.append(data_list[ind][ii])
             
         return data_out
+
+@dataclass
+class FinalModel(fls.Model):
+    step1_list: list = field(init=True, default_factory=list)
+    DIST: float = field(init=True, default=1000.)
+    gauss_range: float = field(init=True, default=20.)
+    models_first_go: int = field(init=True, default=2)
+    extend_range: float = field(init=True, default=20.)
+    conf_thresh: float = field(init=True, default=0.1)
+
+    def _train(self, train_data, validation_data):
+        raise Exception('Not implemented')
+
+    def _infer_single(self,data):
+        res = []
+
+        # Model
+        fls.do_gpu_clearing=True
+        for i_model,model in enumerate(self.step1_list[:self.models_first_go]):
+            flg_yolo2.slices_to_do_global=[]
+            res.append(model.infer(copy.deepcopy(data)))
+            res[-1]['i_model']=i_model
+        labels = pd.concat(copy.deepcopy(res), ignore_index=True)
+        labels = labels[labels['confidence']>self.conf_thresh]
+        z_vals = np.unique(labels['z'])
+        ran = np.round(self.extend_range/data.voxel_spacing).astype(int)
+        z_vals = np.unique((z_vals[:,None]+np.arange(-ran,ran+1)[None,:]).flatten())
+        fls.claim_gpu('')
+        fls.do_gpu_clearing=False
+        for i_model,model in enumerate(self.step1_list[self.models_first_go:]):
+            flg_yolo2.slices_to_do_global=list(z_vals)
+            res.append(model.infer(copy.deepcopy(data)))
+            res[-1]['i_model']=i_model+self.models_first_go
+        labels = pd.concat(res, ignore_index=True)
+        fls.do_gpu_clearing=True
+        fls.claim_gpu('cupy')
+        fls.claim_gpu('pytorch')
+        fls.claim_gpu('')
+
+        # Extract per-slice per-model values
+        results = dict()
+        results['z'] = []
+        results['y'] = []
+        results['x'] = []
+        results['value'] = []
+        while True:        
+            labels = labels.reset_index(drop=True)
+            def get_zyx(ind):
+                return labels['z'][ind], labels['y'][ind], labels['x'][ind]        
+            if len(labels['confidence'])==0:
+                break
+            ind_max = np.argmax(labels['confidence'])
+    
+            if labels['confidence'][ind_max]<0.01:
+                break
+            z,y,x = get_zyx(ind_max)
+            
+            dist_scaled = self.DIST/data.voxel_spacing
+            dist_scaled_int = np.floor(dist_scaled).astype(int)
+            consider = []
+            for ind in range(len(labels)):
+                z2,y2,x2 = get_zyx(ind)
+                consider.append((z2-z)**2+(y2-y)**2+(z2-z)**2 < dist_scaled**2)
+            to_consider = labels[consider]
+            labels = labels[np.logical_not(consider)]
         
+            # 1) define your range of z values
+            z_min = int(z - dist_scaled_int)
+            z_max = int(z + dist_scaled_int)
+            z_range = np.arange(z_min, z_max + 1)
+            
+            # 2) pivot to get max confidence per (z, i_model), filling missing with 0
+            pivot = (
+                to_consider
+                  .pivot_table(
+                     index='z',
+                     columns='i_model',
+                     values='confidence',
+                     aggfunc='max',
+                     fill_value=0
+                  )
+            )
+            
+            # 3) reindex to make sure every z in your window appears, and every model 0..n_model-1
+            pivot = pivot.reindex(
+                index=z_range,
+                columns=np.arange(len(self.step1_list)),
+                fill_value=0
+            )        
+            
+            z_diff = z_range-z
+            z_scaled = z_diff*data.voxel_spacing
+            val = (np.mean(pivot,axis=1)).to_numpy()
+
+            max_loc = np.argmax(val)
+            ran = np.round(self.gauss_range/data.voxel_spacing).astype(int)
+            ran = np.arange(max_loc-ran,max_loc+ran+1)
+            gauss_weights = np.exp(-z_scaled**2/(2*25)**2)
+            gauss_weights = gauss_weights/np.sum(gauss_weights)
+            confidence = np.sum(val*gauss_weights)
+
+            results['z'].append(z)
+            results['y'].append(y)
+            results['x'].append(x)
+            results['value'].append(confidence)
+
+        df = pd.DataFrame(results)
+
+        if len(df)>0:
+            ind_max = np.argmax(df['value'])
+            df = df[ind_max:ind_max+1]
+
+        data.labels = df
+
+        return data
+            

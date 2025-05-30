@@ -63,6 +63,8 @@ class Preprocessor(fls.BaseClass):
                 img = cp.array(data.data).astype(cp.float32)
                 break
             except:
+                fls.do_gpu_clearing = True
+                fls.claim_gpu('pytorch')
                 fls.claim_gpu('')
                 time.sleep(1)
                 fls.claim_gpu('cupy')
@@ -198,13 +200,13 @@ class Preprocessor2(fls.BaseClass):
 
     clip_value = 3.
 
-    #@fls.profile_each_line
     def load_and_preprocess(self, data, desired_original_slices = None, allow_missing=False):
 
         data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size, allow_missing=allow_missing)
 
         # Guess voxel spacing if not provided
         if np.isnan(data.voxel_spacing):
+            raise Exception('We don''t do this anymore')
             xy_size = np.sqrt(data.data.shape[1]*data.data.shape[2])
             data.voxel_spacing = ((-8.71223429e-03)*xy_size + 2.33859781e+01)
             print('Guessed voxel spacing: ', data.voxel_spacing)

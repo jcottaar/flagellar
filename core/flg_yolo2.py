@@ -35,11 +35,12 @@ import matplotlib
 
 
 ran_with_albs = False
+slices_to_do_global = []
 
 @dataclass
 class YOLOModel(fls.BaseClass):
     preprocessor: object = field(init=True, default_factory=flg_preprocess.Preprocessor2)
-    seed = None
+    seed = None    
     
     #Input
     n_ensemble = 1
@@ -760,13 +761,15 @@ class YOLOModel(fls.BaseClass):
             #     'Motor axis 2': round(best_detection['x'])
             # }
         
-
         preprocessor = copy.deepcopy(self.preprocessor)
         if not self.fix_norm_bug:
             preprocessor.scale_std = False
             preprocessor.scale_percentile = False
-        preprocessor.load_and_preprocess(data) 
-
+        if len(slices_to_do_global)==0:
+            preprocessor.load_and_preprocess(data) 
+        else:
+            preprocessor.load_and_preprocess(data, desired_original_slices=slices_to_do_global) 
+            
         if self.prevent_ultralytics_resize:
             #print('before ', data.data.shape)
             image_size = ( (np.ceil(data.data.shape[1]/32)*32).astype(int).item(), (np.ceil(data.data.shape[2]/32)*32).astype(int).item() )
