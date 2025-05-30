@@ -58,18 +58,21 @@ class Preprocessor(fls.BaseClass):
         data.load_to_memory(desired_slices = desired_original_slices, pad_to_original_size = self.pad_to_original_size, allow_missing=allow_missing)
 
         fls.claim_gpu('cupy')
+        n_tried = 0
         while True:
             try:
                 img = cp.array(data.data).astype(cp.float32)
                 break
-            except:
+            except Exception as e:
                 fls.do_gpu_clearing = True
                 fls.claim_gpu('pytorch')
                 fls.claim_gpu('')
                 time.sleep(1)
                 fls.claim_gpu('cupy')
-                print('failed cupy')
-                pass
+                print('failed cupy', n_tried)
+                n_tried+=1
+                if n_tried>10:
+                    raise e
 
         # Scale percentile
         if self.scale_percentile:
@@ -213,16 +216,21 @@ class Preprocessor2(fls.BaseClass):
         data.voxel_spacing *= self.voxel_scale
 
         fls.claim_gpu('cupy')
+        n_tried=0
         while True:
             try:
                 img = cp.array(data.data).astype(cp.float32)
                 break
-            except:
+            except Exception as e:
+                fls.do_gpu_clearing = True
+                fls.claim_gpu('pytorch')
                 fls.claim_gpu('')
                 time.sleep(1)
                 fls.claim_gpu('cupy')
-                print('failed cupy')
-                pass
+                print('failed cupy', n_tried)
+                n_tried+=1
+                if n_tried>10:
+                    raise e
 
         if self.apply_transpose_xz:
             img = cp.transpose(img, axes=(2,1,0))
@@ -266,21 +274,21 @@ class Preprocessor2(fls.BaseClass):
             #gc.collect()
             img = cp.zeros( (len(old_img_list), target_shape[0], target_shape[1]), dtype=cp.float32 )
         
-        for ii in range(img.shape[0]):
-            n_y = old_img_list[ii].shape[0]
-            if n_y%2 == 1:
-                n_y = n_y-1
-            n_x = old_img_list[ii].shape[1]
-            if n_x%2 == 1:
-                n_x = n_x-1
-            img[ii,:,:] = flg_numerics.fourier_resample_nd(old_img_list[ii][:n_y,:n_x], target_shape)
-            img[ii,:,:] = cp.clip(img[ii,:,:], 0., 1.)
-        if len(data.labels)>0:
-            data.labels['x'] *= data.resize_factor
-            data.labels['y'] *= data.resize_factor
-        if len(data.negative_labels)>0:
-            data.negative_labels['x'] *= data.resize_factor
-            data.negative_labels['y'] *= data.resize_factor
+            for ii in range(img.shape[0]):
+                n_y = old_img_list[ii].shape[0]
+                if n_y%2 == 1:
+                    n_y = n_y-1
+                n_x = old_img_list[ii].shape[1]
+                if n_x%2 == 1:
+                    n_x = n_x-1
+                img[ii,:,:] = flg_numerics.fourier_resample_nd(old_img_list[ii][:n_y,:n_x], target_shape)
+                img[ii,:,:] = cp.clip(img[ii,:,:], 0., 1.)
+            if len(data.labels)>0:
+                data.labels['x'] *= data.resize_factor
+                data.labels['y'] *= data.resize_factor
+            if len(data.negative_labels)>0:
+                data.negative_labels['x'] *= data.resize_factor
+                data.negative_labels['y'] *= data.resize_factor
         # plt.figure()
         # plt.imshow(cp.asnumpy(img[6,:,:]), cmap='bone')
         # plt.colorbar()

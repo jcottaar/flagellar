@@ -592,18 +592,24 @@ class FinalModel(fls.Model):
         z_vals = np.unique(labels['z'])
         ran = np.round(self.extend_range/data.voxel_spacing).astype(int)
         z_vals = np.unique((z_vals[:,None]+np.arange(-ran,ran+1)[None,:]).flatten())
-        fls.claim_gpu('')
-        fls.do_gpu_clearing=False
-        for i_model,model in enumerate(self.step1_list[self.models_first_go:]):
-            flg_yolo2.slices_to_do_global=list(z_vals)
-            res.append(model.infer(copy.deepcopy(data)))
-            res[-1]['i_model']=i_model+self.models_first_go
-        labels = pd.concat(res, ignore_index=True)
-        fls.do_gpu_clearing=True
-        fls.claim_gpu('cupy')
-        fls.claim_gpu('pytorch')
-        fls.claim_gpu('')
-
+        import glob
+        data_len = len(glob.glob(data.data_dir()+'/*'))
+        print(data_len)
+        z_vals = z_vals[np.logical_and(z_vals>=0, z_vals<=data_len)]
+        print(z_vals)
+        if len(z_vals)>0:            
+            fls.claim_gpu('')
+            fls.do_gpu_clearing=False
+            for i_model,model in enumerate(self.step1_list[self.models_first_go:]):
+                flg_yolo2.slices_to_do_global=list(z_vals)
+                res.append(model.infer(copy.deepcopy(data)))
+                res[-1]['i_model']=i_model+self.models_first_go
+            labels = pd.concat(res, ignore_index=True)
+            fls.do_gpu_clearing=True
+            fls.claim_gpu('cupy')
+            fls.claim_gpu('pytorch')
+            fls.claim_gpu('')
+    
         # Extract per-slice per-model values
         results = dict()
         results['z'] = []
@@ -672,6 +678,8 @@ class FinalModel(fls.Model):
             results['value'].append(confidence)
 
         df = pd.DataFrame(results)
+
+        data.labels_unfiltered = copy.deepcopy(df)
 
         if len(df)>0:
             ind_max = np.argmax(df['value'])
