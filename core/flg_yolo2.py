@@ -257,6 +257,8 @@ class YOLOModel(fls.BaseClass):
                             y2 = (y_center_norm+box_height_norm/2)*normalized_img.shape[0]
                             #plt.gca().add_patch(matplotlib.patches.Rectangle((x1,y1), x2-x1,y2-y1, alpha=0.5, facecolor='blue'))
 
+                    
+
                 
                 if self.alternative_slice_selection:
                     neg_slice_counter = 0.

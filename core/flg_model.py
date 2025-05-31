@@ -570,7 +570,7 @@ class TestTimeAugmentation(fls.Model):
 class FinalModel(fls.Model):
     step1_list: list = field(init=True, default_factory=list)
     DIST: float = field(init=True, default=1000.)
-    gauss_range: float = field(init=True, default=20.)
+    gauss_range: float = field(init=True, default=25.)
     models_first_go: int = field(init=True, default=2)
     extend_range: float = field(init=True, default=20.)
     conf_thresh: float = field(init=True, default=0.1)
@@ -633,7 +633,7 @@ class FinalModel(fls.Model):
             consider = []
             for ind in range(len(labels)):
                 z2,y2,x2 = get_zyx(ind)
-                consider.append((z2-z)**2+(y2-y)**2+(z2-z)**2 < dist_scaled**2)
+                consider.append((z2-z)**2+(y2-y)**2+(x2-x)**2 < dist_scaled**2)
             to_consider = labels[consider]
             labels = labels[np.logical_not(consider)]
         
@@ -666,9 +666,9 @@ class FinalModel(fls.Model):
             val = (np.mean(pivot,axis=1)).to_numpy()
 
             max_loc = np.argmax(val)
-            ran = np.round(self.gauss_range/data.voxel_spacing).astype(int)
-            ran = np.arange(max_loc-ran,max_loc+ran+1)
-            gauss_weights = np.exp(-z_scaled**2/(2*25)**2)
+            #ran = np.round(self.gauss_range/data.voxel_spacing).astype(int)
+            #ran = np.arange(max_loc-ran,max_loc+ran+1)
+            gauss_weights = np.exp(-z_scaled**2/(2*self.gauss_range)**2)
             gauss_weights = gauss_weights/np.sum(gauss_weights)
             confidence = np.sum(val*gauss_weights)
 
